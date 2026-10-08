@@ -722,6 +722,17 @@ export function floatOf(f: Flt) {
   return v.getFloat32(0);
 }
 
+export function setFloat(f: Flt, n: number) {
+  const v = new DataView(new ArrayBuffer(4));
+  v.setFloat32(0, n);
+  f.bits = v.getInt32(0);
+}
+
+export function mulFloat(f: Flt | null | undefined, m: number) {
+  if (!f || m === 1) return;
+  setFloat(f, floatOf(f) * m);
+}
+
 function readSkin(r: In, nonessential: boolean, isDefault: boolean): SkinIR | null {
   if (isDefault) {
     const slotCount = r.vi();
@@ -986,8 +997,8 @@ export function readSkel(bytes: Uint8Array): SkelIR {
   const hashLow = r.i32();
   const hashHigh = r.i32();
   const version = r.str();
-  const x = F(r.fbits());
-  const y = F(r.fbits());
+  const x = F(r.fbits(), 1);
+  const y = F(r.fbits(), 1);
   const width = F(r.fbits(), 1);
   const height = F(r.fbits(), 1);
   const referenceScale = F(r.fbits());
@@ -1686,6 +1697,282 @@ export function scaleSkel(sk: SkelIR, factor: number, offsetX = 0, offsetY = 0) 
     by.setFloat32(0, by.getFloat32(0) + offsetY);
     sk.bones[0].y.bits = by.getInt32(0);
   }
+}
+
+export function slotBoneIndex(raw: Uint8Array): number {
+  const r = new In(raw);
+  r.str();
+  return r.vi();
+}
+
+export function slotNameOf(raw: Uint8Array): string | null {
+  const r = new In(raw);
+  return r.str();
+}
+
+function scaleCurveValues(curves: TlCurves | undefined, sx: number, sy: number, mode: "mul" | "div") {
+  if (!curves) return;
+  const mx = mode === "div" ? (sx === 0 ? 1 : 1 / sx) : sx;
+  const my = mode === "div" ? (sy === 0 ? 1 : 1 / sy) : sy;
+  if (mx === 1 && my === 1) return;
+  for (const fr of curves.frames) {
+    if (fr.values[0]) mulFloat(fr.values[0], mx);
+    if (fr.values[1]) mulFloat(fr.values[1], my);
+    const dims = fr.values.length;
+    for (let d = 0; d < dims; d++) {
+      const m = d === 0 ? mx : my;
+      const base = d * 4;
+      if (fr.bez[base + 1]) mulFloat(fr.bez[base + 1], m);
+      if (fr.bez[base + 3]) mulFloat(fr.bez[base + 3], m);
+    }
+  }
+}
+
+function scaleInfluences(bones: number[], verts: Flt[], bone: number, sx: number, sy: number) {
+  let bi = 0;
+  let vi = 0;
+  while (bi < bones.length) {
+    const bc = bones[bi++];
+    for (let k = 0; k < bc; k++) {
+      const b = bones[bi++];
+      if (b === bone) {
+        mulFloat(verts[vi], sx);
+        mulFloat(verts[vi + 1], sy);
+      }
+      vi += 3;
+    }
+  }
+}
+
+function bakeAttachments(sk: SkelIR, bone: number, sx: number, sy: number) {
+  if (sx === 1 && sy === 1) return;
+  for (const skin of sk.skins) {
+    for (const sl of skin.slots) {
+      const raw = sk.slots[sl.slotIndex] as Uint8Array;
+      const slotBone = raw ? slotBoneIndex(raw) : -1;
+      for (const a of sl.atts) {
+        const att = a.att;
+        if (att.type === "region" && slotBone === bone) {
+          mulFloat(att.x, sx);
+          mulFloat(att.y, sy);
+          mulFloat(att.width, sx);
+          mulFloat(att.height, sy);
+        } else if (att.type === "point" && slotBone === bone) {
+          mulFloat(att.x, sx);
+          mulFloat(att.y, sy);
+        } else if (
+          att.type === "mesh" ||
+          att.type === "bbox" ||
+          att.type === "path" ||
+          att.type === "clip"
+        ) {
+          if (att.weighted && att.bones) scaleInfluences(att.bones, att.verts, bone, sx, sy);
+          else if (!att.weighted && slotBone === bone) {
+            for (let v = 0; v + 1 < att.verts.length; v += 2) {
+              mulFloat(att.verts[v], sx);
+              mulFloat(att.verts[v + 1], sy);
+            }
+            if (att.type === "path") for (const len of att.lengths) mulFloat(len, sx);
+          }
+        }
+      }
+    }
+  }
+}
+
+function scaleBoneTranslate(sk: SkelIR, boneIndex: number, sx: number, sy: number) {
+  if (sx === 1 && sy === 1) return;
+  for (const anim of sk.animations) {
+    for (const g of anim.bones) {
+      if (g.boneIndex !== boneIndex) continue;
+      for (const it of g.items) {
+        if (it.type === 1) scaleCurveValues(it.curves, sx, sy, "mul");
+        else if (it.type === 2) scaleCurveValues(it.curves, sx, 1, "mul");
+        else if (it.type === 3) scaleCurveValues(it.curves, 1, sy, "mul");
+      }
+    }
+  }
+}
+
+function scaleBoneScaleKeys(sk: SkelIR, boneIndex: number, sx: number, sy: number) {
+  if (Math.abs(sx - 1) < 1e-8 && Math.abs(sy - 1) < 1e-8) return;
+  for (const anim of sk.animations) {
+    for (const g of anim.bones) {
+      if (g.boneIndex !== boneIndex) continue;
+      for (const it of g.items) {
+        if (it.type === 4) scaleCurveValues(it.curves, sx, sy, "div");
+      }
+    }
+  }
+}
+
+/** Push each bone's scale into children and attachments, then set scale to 1.
+ * Own x/y are not multiplied by the bone's own scale. */
+export function bakeSkelScales(sk: SkelIR) {
+  const n = sk.bones.length;
+  const kids: number[][] = Array.from({ length: n }, () => []);
+  for (let i = 0; i < n; i++) {
+    const p = sk.bones[i].parent;
+    if (p != null) kids[p].push(i);
+  }
+  const orig = sk.bones.map((b) => ({ sx: floatOf(b.scaleX), sy: floatOf(b.scaleY) }));
+  const order: number[] = [];
+  const seen = new Set<number>();
+  const dfs = (i: number) => {
+    if (seen.has(i)) return;
+    seen.add(i);
+    const p = sk.bones[i].parent;
+    if (p != null) dfs(p);
+    order.push(i);
+  };
+  for (let i = 0; i < n; i++) dfs(i);
+
+  for (const i of order) {
+    const b = sk.bones[i];
+    const sx = floatOf(b.scaleX);
+    const sy = floatOf(b.scaleY);
+    mulFloat(b.length, sx);
+    bakeAttachments(sk, i, sx, sy);
+    for (const c of kids[i]) {
+      const ch = sk.bones[c];
+      if (ch.inherit !== 0) continue;
+      mulFloat(ch.x, sx);
+      mulFloat(ch.y, sy);
+      mulFloat(ch.scaleX, sx);
+      mulFloat(ch.scaleY, sy);
+      scaleBoneTranslate(sk, c, sx, sy);
+    }
+    scaleBoneScaleKeys(sk, i, orig[i].sx, orig[i].sy);
+    if (floatOf(b.scaleX) !== 1) setFloat(b.scaleX, 1);
+    if (floatOf(b.scaleY) !== 1) setFloat(b.scaleY, 1);
+  }
+}
+
+type World = { x: number; y: number; a: number; b: number; c: number; d: number };
+
+function boneWorlds(bones: BoneIR[]): World[] {
+  const world: World[] = [];
+  const resolve = (i: number): World => {
+    if (world[i]) return world[i];
+    const b = bones[i];
+    const parent: World =
+      b.parent == null
+        ? { x: 0, y: 0, a: 1, b: 0, c: 0, d: 1 }
+        : resolve(b.parent);
+    const lx = floatOf(b.x);
+    const ly = floatOf(b.y);
+    const rot = (floatOf(b.rotation) * Math.PI) / 180;
+    const lsx = floatOf(b.scaleX);
+    const lsy = floatOf(b.scaleY);
+    const cos = Math.cos(rot);
+    const sin = Math.sin(rot);
+    const la = cos * lsx;
+    const lb = sin * lsx;
+    const lc = -sin * lsy;
+    const ld = cos * lsy;
+    const w: World = {
+      x: parent.x + parent.a * lx + parent.b * ly,
+      y: parent.y + parent.c * lx + parent.d * ly,
+      a: parent.a * la + parent.b * lc,
+      b: parent.a * lb + parent.b * ld,
+      c: parent.c * la + parent.d * lc,
+      d: parent.c * lb + parent.d * ld,
+    };
+    world[i] = w;
+    return w;
+  };
+  for (let i = 0; i < bones.length; i++) resolve(i);
+  return world;
+}
+
+export interface Aabb {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  width: number;
+  height: number;
+}
+
+function emptyAabb(): Aabb {
+  return { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity, width: 0, height: 0 };
+}
+
+function finishAabb(box: Aabb): Aabb {
+  if (!Number.isFinite(box.minX)) return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
+  box.width = box.maxX - box.minX;
+  box.height = box.maxY - box.minY;
+  return box;
+}
+
+function addPt(box: Aabb, x: number, y: number) {
+  if (x < box.minX) box.minX = x;
+  if (y < box.minY) box.minY = y;
+  if (x > box.maxX) box.maxX = x;
+  if (y > box.maxY) box.maxY = y;
+}
+
+export function skelWorldAABB(sk: SkelIR): Aabb {
+  const world = boneWorlds(sk.bones);
+  const box = emptyAabb();
+  const xform = (wt: World, x: number, y: number) => {
+    addPt(box, wt.x + wt.a * x + wt.b * y, wt.y + wt.c * x + wt.d * y);
+  };
+  for (const skin of sk.skins) {
+    for (const sl of skin.slots) {
+      const raw = sk.slots[sl.slotIndex] as Uint8Array | undefined;
+      const slotBone = raw ? slotBoneIndex(raw) : 0;
+      const wt = world[slotBone] ?? { x: 0, y: 0, a: 1, b: 0, c: 0, d: 1 };
+      for (const a of sl.atts) {
+        const att = a.att;
+        if (att.type === "region") {
+          const w = floatOf(att.width) * floatOf(att.scaleX);
+          const h = floatOf(att.height) * floatOf(att.scaleY);
+          const ax = floatOf(att.x);
+          const ay = floatOf(att.y);
+          const rot = (floatOf(att.rotation) * Math.PI) / 180;
+          const cos = Math.cos(rot);
+          const sin = Math.sin(rot);
+          const hw = w / 2;
+          const hh = h / 2;
+          for (const [cx, cy] of [
+            [-hw, -hh],
+            [hw, -hh],
+            [hw, hh],
+            [-hw, hh],
+          ] as const) {
+            xform(wt, cx * cos - cy * sin + ax, cx * sin + cy * cos + ay);
+          }
+        } else if (att.type === "mesh" || att.type === "bbox" || att.type === "clip" || att.type === "path") {
+          if (att.weighted && att.bones) {
+            let bi = 0;
+            let vi = 0;
+            while (bi < att.bones.length) {
+              const bc = att.bones[bi++];
+              let wx = 0;
+              let wy = 0;
+              for (let k = 0; k < bc; k++) {
+                const b = att.bones[bi++];
+                const x = floatOf(att.verts[vi++]);
+                const y = floatOf(att.verts[vi++]);
+                const wgt = floatOf(att.verts[vi++]);
+                const bw = world[b] ?? wt;
+                wx += (bw.x + bw.a * x + bw.b * y) * wgt;
+                wy += (bw.y + bw.c * x + bw.d * y) * wgt;
+              }
+              addPt(box, wx, wy);
+            }
+          } else {
+            for (let v = 0; v + 1 < att.verts.length; v += 2) xform(wt, floatOf(att.verts[v]), floatOf(att.verts[v + 1]));
+          }
+        } else if (att.type === "point") {
+          xform(wt, floatOf(att.x), floatOf(att.y));
+        }
+      }
+    }
+  }
+  if (!Number.isFinite(box.minX)) for (const w of world) addPt(box, w.x, w.y);
+  return finishAabb(box);
 }
 
 export function skelSummary(sk: SkelIR) {
