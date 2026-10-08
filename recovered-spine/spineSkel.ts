@@ -856,11 +856,17 @@ function readCurves2(r: In, frameCount: number, ks: ScaleKind): TlCurves {
   return { bezierCount: 0, frames };
 }
 function writeCurves(w: Out, c: TlCurves, factor: number) {
-  for (const fr of c.frames) {
-    w.flt(fr.time, factor);
-    for (const v of fr.values) w.flt(v, factor);
-    if (fr.curve == null) break;
-    w.u8(fr.curve);
+  const frames = c.frames;
+  if (!frames.length) return;
+  // File order matches SkeletonBinary readTimeline: next key is stored BEFORE the curve byte.
+  w.flt(frames[0].time, factor);
+  for (const v of frames[0].values) w.flt(v, factor);
+  for (let i = 0; i < frames.length - 1; i++) {
+    const next = frames[i + 1];
+    w.flt(next.time, factor);
+    for (const v of next.values) w.flt(v, factor);
+    const fr = frames[i];
+    w.u8(fr.curve ?? 0);
     for (const b of fr.bez) w.flt(b, factor);
   }
 }
