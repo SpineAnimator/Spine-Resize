@@ -1,22 +1,13 @@
 # Прогресс
 
-Обновлено в этой сессии. Сайт Pages пока прежний (`index.html` + `app.js`): JSON / atlas / png. Ниже уже в репозитории, чтобы не потерять.
+Последний пуш: исходники масштаба, сайт Pages ещё старый `index.html`/`app.js` (JSON).
 
-## В коде
+## Уже в репозитории
 
-- `src/lib/spineSkel.ts`
-  - bounds `x/y` помечены как дистанции (`k=1`). `referenceScale` и `fps` не трогаются.
-  - `bakeSkelScales`: свой scale кости уходит в length, во вложения и в детей. Свой `x/y` на свой scale не умножается.
-  - translate-ключи детей умножаются на scale родителя. Scale-ключи делятся на исходный setup scale.
-  - `skelWorldAABB` по регионам и мешам (включая веса).
-  - `slotBoneIndex` достаёт индекс кости из сырых байт слота.
-- `src/lib/spineProject.ts`
-  - `.spine` = raw deflate.
-  - Масштаб: хвост кости (x, y, length) — 71 запись на symbols.spine, регионы с подписью `0D 0A 01 01`, группы вершин `01 11 01 <n> … 36 01 02 00`, крупные translate-пары `01 01 <time> <x> <y> 01` если |x| или |y| ≥ 8.
-  - factor=1 возвращает исходные байты, без пережатия.
+- `src/lib/spineSkel.ts` — roundtrip `.skel`, bake scale=1 (свой scale не умножает свой x/y), AABB.
+- `src/lib/spineProject.ts` — `.spine` raw deflate: кости x/y/length, регионы, вершины меша, крупные translate.
+- `src/lib/resizeCore.ts` — общий bake/AABB/factor для JSON и вызов skel/spine. В страницу ещё не подключён.
 
-## Ещё не в сайте
+## Дальше
 
-Интерфейс на Pages пока не вызывает этот код. Следующий коммит: чёрный экран без прокрутки, одна кнопка, `.skel` и `.spine` в том же ZIP, что картинки и atlas.
-
-Bake scale=1 для `.spine` по-прежнему нельзя: индекс родителя в проекте не найден.
+Чёрный экран на одну страницу, одна кнопка, ZIP с `.json`/`.skel`/`.spine`/atlas/png. Проверка на gunslinger и symbols.spine.
