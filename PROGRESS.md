@@ -1,13 +1,10 @@
 # Прогресс
 
-Последний пуш: исходники масштаба, сайт Pages ещё старый `index.html`/`app.js` (JSON).
+Сайт: чёрный экран, одна кнопка Resize. Файлы не уходят с компьютера.
 
-## Уже в репозитории
+- `.skel` — чтение/запись, bake scale=1 (свой scale уходит детям и вложениям), вписать в квадрат, центр в root.
+- `.json` — тот же bake и масштаб.
+- `.spine` — raw deflate. Кости x/y/length, регионы, меши (оба хвоста `36 01 02 00` и `1f 1e 01 ff`). На symbols.spine все 809 проверенных x вершин масштабируются. Поворот и scale костей не трогаются. Центр — сдвиг root.
+- atlas и png тем же множителем.
 
-- `src/lib/spineSkel.ts` — roundtrip `.skel`, bake scale=1 (свой scale не умножает свой x/y), AABB.
-- `src/lib/spineProject.ts` — `.spine` raw deflate: кости x/y/length, регионы, вершины меша, крупные translate.
-- `src/lib/resizeCore.ts` — общий bake/AABB/factor для JSON и вызов skel/spine. В страницу ещё не подключён.
-
-## Дальше
-
-Чёрный экран на одну страницу, одна кнопка, ZIP с `.json`/`.skel`/`.spine`/atlas/png. Проверка на gunslinger и symbols.spine.
+factor=1 для .skel даёт те же байты. factor=1 для .spine возвращает исходный файл.

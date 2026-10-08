@@ -37,6 +37,28 @@ interface BoneOff {
   name: string;
 }
 
+function lockBoneExtras(data: Uint8Array, anchor: number, lock: (o: number) => void) {
+  // scaleY sits immediately after 22 00 00 00 00 0E
+  lock(anchor + 6);
+  // rotation: 0C <f32> 17 00 00 00 00   before the 0A x tag
+  const from = Math.max(0, anchor - 48);
+  for (let p = anchor - 5; p >= from; p--) {
+    if (
+      data[p] === 0x17 &&
+      data[p + 1] === 0x00 &&
+      data[p + 2] === 0x00 &&
+      data[p + 3] === 0x00 &&
+      data[p + 4] === 0x00 &&
+      p >= 5 &&
+      data[p - 5] === 0x0c
+    ) {
+      lock(p - 4);
+      if (p >= 10 && data[p - 10] === 0x0d) lock(p - 9);
+      break;
+    }
+  }
+}
+
 function parseBone(data: Uint8Array, i: number): BoneOff | null {
   if (i < 5 || data[i - 5] !== 0x0a) return null;
   let j = i + 10;
@@ -72,12 +94,22 @@ function regionOffsets(data: Uint8Array, i: number): { x: number; y: number; w: 
   return { h: i - 14, y: i - 9, x: i - 4, w: after + 6 };
 }
 
-export function scaleSpineInflated(src: Uint8Array, factor: number): { bytes: Uint8Array; stats: SpineScaleStats } {
+export function scaleSpineInflated(
+  src: Uint8Array,
+  factor: number,
+  offsetX = 0,
+  offsetY = 0,
+): { bytes: Uint8Array; stats: SpineScaleStats } {
   const data = new Uint8Array(src);
   const used = new Set<number>();
+  const locked = new Set<number>();
   const mark = (o: number) => {
+    if (locked.has(o)) return;
     used.add(o);
     setF(data, o, getF(data, o) * factor);
+  };
+  const lock = (o: number) => {
+    if (o >= 0 && o + 4 <= data.length) locked.add(o);
   };
 
   let bones = 0;
@@ -87,6 +119,7 @@ export function scaleSpineInflated(src: Uint8Array, factor: number): { bytes: Ui
     if (!b) continue;
     bones++;
     if (b.name === "root") root = b;
+    lockBoneExtras(data, i, lock);
     mark(b.x);
     mark(b.y);
     mark(b.length);
@@ -118,19 +151,27 @@ export function scaleSpineInflated(src: Uint8Array, factor: number): { bytes: Ui
     if (x > maxX) maxX = x;
     if (y > maxY) maxY = y;
   };
-  const trailer = [0x36, 0x01, 0x02, 0x00];
+  const trailers = [
+    [0x36, 0x01, 0x02, 0x00],
+    [0x1f, 0x1e, 0x01, 0xff],
+  ];
   for (let i = 0; i + 8 < data.length; i++) {
     if (data[i] !== 0x01 || data[i + 1] !== 0x11 || data[i + 2] !== 0x01) continue;
     const n = data[i + 3];
     if (n < 2 || n > 40 || n % 2 !== 0) continue;
     const end = i + 4 + n * 4;
     if (end + 4 > data.length) continue;
-    let ok = true;
-    for (let k = 0; k < 4; k++) if (data[end + k] !== trailer[k]) ok = false;
+    let ok = false;
+    for (const trailer of trailers) {
+      let match = true;
+      for (let k = 0; k < 4; k++) if (data[end + k] !== trailer[k]) match = false;
+      if (match) ok = true;
+    }
     if (!ok) continue;
     for (let k = 0; k < n; k += 2) {
       const xo = i + 4 + k * 4;
       const yo = xo + 4;
+      if (locked.has(xo) || locked.has(yo)) continue;
       add(getF(data, xo), getF(data, yo));
       if (!used.has(xo)) {
         mark(xo);
@@ -149,7 +190,7 @@ export function scaleSpineInflated(src: Uint8Array, factor: number): { bytes: Ui
     if (data[j] !== 0x01 || data[j + 1] !== 0x01 || data[j + 14] !== 0x01) continue;
     const xo = j + 6;
     const yo = j + 10;
-    if (used.has(xo) || used.has(yo)) continue;
+    if (used.has(xo) || used.has(yo) || locked.has(xo) || locked.has(yo)) continue;
     const t = getF(data, j + 2);
     const x = getF(data, xo);
     const y = getF(data, yo);
@@ -161,8 +202,11 @@ export function scaleSpineInflated(src: Uint8Array, factor: number): { bytes: Ui
     animPairs++;
   }
 
-  // Center is unsafe without parents. Root shift is left to the caller via root name.
-  void root;
+  // Root local x/y is world position when the root is unrotated, which matches .skel centering.
+  if (root && (offsetX || offsetY)) {
+    if (offsetX) setF(data, root.x, getF(data, root.x) + offsetX);
+    if (offsetY) setF(data, root.y, getF(data, root.y) + offsetY);
+  }
   for (const r of regionPts) {
     add(r.x - r.w / 2, r.y - r.h / 2);
     add(r.x + r.w / 2, r.y + r.h / 2);
@@ -187,23 +231,28 @@ export function scaleSpineInflated(src: Uint8Array, factor: number): { bytes: Ui
 
 export async function inflateRaw(raw: Uint8Array): Promise<Uint8Array> {
   const ds = new DecompressionStream("deflate-raw");
-  const buf = await new Response(new Blob([raw]).stream().pipeThrough(ds)).arrayBuffer();
+  const buf = await new Response(new Blob([raw.slice()]).stream().pipeThrough(ds)).arrayBuffer();
   return new Uint8Array(buf);
 }
 
 export async function deflateRaw(data: Uint8Array): Promise<Uint8Array> {
   const cs = new CompressionStream("deflate-raw");
-  const buf = await new Response(new Blob([data]).stream().pipeThrough(cs)).arrayBuffer();
+  const buf = await new Response(new Blob([data.slice()]).stream().pipeThrough(cs)).arrayBuffer();
   return new Uint8Array(buf);
 }
 
-export async function scaleSpineFile(raw: Uint8Array, factor: number): Promise<{ bytes: Uint8Array; stats: SpineScaleStats }> {
+export async function scaleSpineFile(
+  raw: Uint8Array,
+  factor: number,
+  offsetX = 0,
+  offsetY = 0,
+): Promise<{ bytes: Uint8Array; stats: SpineScaleStats }> {
   const inflated = await inflateRaw(raw);
-  if (factor === 1) {
+  if (factor === 1 && !offsetX && !offsetY) {
     const stats = scaleSpineInflated(inflated, 1).stats;
     return { bytes: raw, stats };
   }
-  const scaled = scaleSpineInflated(inflated, factor);
+  const scaled = scaleSpineInflated(inflated, factor, offsetX, offsetY);
   return { bytes: await deflateRaw(scaled.bytes), stats: scaled.stats };
 }
 
