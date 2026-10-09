@@ -360,19 +360,72 @@ function scaleDeformTree(node: unknown, s: number) {
   for (const value of Object.values(node as Record<string, unknown>)) scaleDeformTree(value, s);
 }
 
+function mulNum(obj: Record<string, unknown>, key: string, s: number) {
+  if (typeof obj[key] === "number") obj[key] = (obj[key] as number) * s;
+}
+
+/** Distances Spine's JSON loader multiplies by skeleton scale. Mix, angles and 0–1 weights stay. */
+function scaleTransformBody(c: Record<string, unknown>, s: number) {
+  mulNum(c, "x", s);
+  mulNum(c, "y", s);
+  const props = c.properties;
+  if (!props || typeof props !== "object" || Array.isArray(props)) return;
+  for (const [fromName, fromVal] of Object.entries(props as Record<string, unknown>)) {
+    if (!fromVal || typeof fromVal !== "object" || Array.isArray(fromVal)) continue;
+    const from = fromVal as Record<string, unknown>;
+    const fromS = fromName === "x" || fromName === "y" ? s : 1;
+    if (fromS !== 1) mulNum(from, "offset", fromS);
+    const to = from.to;
+    if (!to || typeof to !== "object" || Array.isArray(to)) continue;
+    for (const [toName, toVal] of Object.entries(to as Record<string, unknown>)) {
+      if (!toVal || typeof toVal !== "object" || Array.isArray(toVal)) continue;
+      const rec = toVal as Record<string, unknown>;
+      const toS = toName === "x" || toName === "y" ? s : 1;
+      if (toS !== 1) {
+        mulNum(rec, "offset", toS);
+        mulNum(rec, "max", toS);
+      }
+      const ratio = fromS === 0 ? 1 : toS / fromS;
+      if (ratio !== 1 && typeof rec.scale === "number") rec.scale = (rec.scale as number) * ratio;
+    }
+  }
+}
+
+function scalePhysicsBody(c: Record<string, unknown>, s: number) {
+  // x/y are how much translation is affected (0–1), not positions. limit is a distance.
+  // wind/gravity are world forces; keys below already scale, setup has to follow.
+  mulNum(c, "limit", s);
+  mulNum(c, "wind", s);
+  mulNum(c, "gravity", s);
+}
+
+function scaleSliderBody(c: Record<string, unknown>, s: number) {
+  if (c.property !== "x" && c.property !== "y") return;
+  mulNum(c, "from", s);
+  if (typeof c.scale === "number" && s !== 0) c.scale = (c.scale as number) / s;
+}
+
 function scaleConstraintSetup(data: SpineJson, s: number) {
-  for (const c of data.constraints ?? []) {
-    if (typeof c.softness === "number") c.softness *= s;
-    if (c.type === "path" || c.type == null) {
+  for (const raw of data.constraints ?? []) {
+    const c = raw as Record<string, unknown>;
+    if (typeof c.softness === "number") c.softness = (c.softness as number) * s;
+    if (c.type === "transform") scaleTransformBody(c, s);
+    else if (c.type === "physics") scalePhysicsBody(c, s);
+    else if (c.type === "slider") scaleSliderBody(c, s);
+    else if (c.type === "path" || c.type == null) {
       const positionMode = c.positionMode;
       const spacingMode = c.spacingMode;
-      if (typeof c.position === "number" && positionMode === "fixed") c.position *= s;
-      if (typeof c.spacing === "number" && (spacingMode === "length" || spacingMode == null) && c.type === "path") c.spacing *= s;
+      if (typeof c.position === "number" && positionMode === "fixed") c.position = (c.position as number) * s;
+      if (typeof c.spacing === "number" && (spacingMode === "length" || spacingMode === "fixed" || spacingMode == null) && c.type === "path") {
+        c.spacing = (c.spacing as number) * s;
+      }
     }
   }
   for (const c of data.ik ?? []) {
     if (typeof c.softness === "number") c.softness *= s;
   }
+  const legacy = data as SpineJson & { physics?: Record<string, unknown>[] };
+  for (const c of legacy.physics ?? []) scalePhysicsBody(c, s);
 }
 
 export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY = 0) {
@@ -441,28 +494,32 @@ export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY 
       if (!Array.isArray(keys)) continue;
       for (const k of keys) if (typeof k.softness === "number") k.softness *= s;
     }
-    const pathMode = new Map<string, { position?: string; spacing?: string }>();
+    const pathMode = new Map<string, { position: string; spacing: string }>();
+    const rememberPath = (c: Record<string, unknown>) => {
+      if (typeof c.name !== "string") return;
+      pathMode.set(c.name, {
+        position: typeof c.positionMode === "string" ? c.positionMode : "percent",
+        spacing: typeof c.spacingMode === "string" ? c.spacingMode : "length",
+      });
+    };
     for (const c of data.constraints ?? []) {
-      if (c.type === "path" && typeof c.name === "string") {
-        pathMode.set(c.name, {
-          position: typeof c.positionMode === "string" ? c.positionMode : undefined,
-          spacing: typeof c.spacingMode === "string" ? c.spacingMode : undefined,
-        });
-      }
+      if (c.type === "path") rememberPath(c as Record<string, unknown>);
     }
+    for (const c of data.path ?? []) rememberPath(c as Record<string, unknown>);
     for (const [name, constraint] of Object.entries(anim.path ?? {})) {
       if (!constraint || typeof constraint !== "object" || Array.isArray(constraint)) continue;
       const mode = pathMode.get(name);
-      if (!mode || mode.position === "fixed") {
-        for (const k of constraint.position ?? []) if (typeof k.value === "number" && mode?.position === "fixed") k.value *= s;
+      if (mode?.position === "fixed") {
+        for (const k of constraint.position ?? []) if (typeof k.value === "number") k.value *= s;
       }
-      if (mode?.spacing === "length") {
+      if (mode?.spacing === "length" || mode?.spacing === "fixed") {
         for (const k of constraint.spacing ?? []) if (typeof k.value === "number") k.value *= s;
       }
     }
     for (const constraint of Object.values(anim.physics ?? {})) {
       if (!constraint || typeof constraint !== "object") continue;
-      for (const name of ["x", "y", "wind", "gravity"] as const) {
+      // x/y are influence, not distances. wind/gravity match the setup scale above.
+      for (const name of ["wind", "gravity"] as const) {
         const keys = constraint[name];
         if (!Array.isArray(keys)) continue;
         for (const k of keys) if (typeof k.value === "number") k.value *= s;
@@ -476,7 +533,7 @@ export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY 
   }
   for (const c of data.path ?? []) {
     if (c.position != null && c.positionMode === "fixed") c.position *= s;
-    if (c.spacing != null && (c.spacingMode === "length" || c.spacingMode == null)) c.spacing *= s;
+    if (c.spacing != null && (c.spacingMode === "length" || c.spacingMode === "fixed" || c.spacingMode == null)) c.spacing *= s;
   }
   const sk = data.skeleton;
   if (sk) {

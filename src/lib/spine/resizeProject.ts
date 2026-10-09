@@ -26,9 +26,15 @@ function baseName(path: string) {
   return parts[parts.length - 1] || path;
 }
 
-function isAtlas(path: string) {
+function kindOf(path: string): "json" | "skel" | "spine" | "atlas" | "image" | "other" {
   const name = baseName(path).toLowerCase();
-  return name.endsWith(".atlas") || name.endsWith(".atlas.txt");
+  // Unity writes binary skeletons as .skel.bytes. Last-dot ".bytes" used to copy them unchanged.
+  if (name.endsWith(".atlas") || name.endsWith(".atlas.txt")) return "atlas";
+  if (name.endsWith(".skel") || name.endsWith(".skel.bytes")) return "skel";
+  if (name.endsWith(".json")) return "json";
+  if (name.endsWith(".spine")) return "spine";
+  if (IMAGE_EXT.has(extOf(path))) return "image";
+  return "other";
 }
 
 function extOf(path: string) {
@@ -146,8 +152,8 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
   const rest: SpineEntry[] = [];
 
   for (const entry of entries) {
-    const ext = extOf(entry.path);
-    if (ext === ".json") {
+    const kind = kindOf(entry.path);
+    if (kind === "json") {
       const data = parseJson(entry.data);
       if (!data) {
         rest.push(entry);
@@ -155,13 +161,13 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
       }
       if (opts.bake) bakeJsonScales(data);
       jsons.push({ path: entry.path, data, box: jsonAABB(data) });
-    } else if (ext === ".skel") {
+    } else if (kind === "skel") {
       const sk = readSkel(entry.data);
       if (opts.bake) bakeSkelScales(sk);
       skels.push({ path: entry.path, sk, box: skelWorldAABB(sk) });
-    } else if (ext === ".spine") spines.push(entry);
-    else if (isAtlas(entry.path)) atlases.push(entry);
-    else if (IMAGE_EXT.has(ext)) images.push(entry);
+    } else if (kind === "spine") spines.push(entry);
+    else if (kind === "atlas") atlases.push(entry);
+    else if (kind === "image") images.push(entry);
     else rest.push(entry);
   }
 
