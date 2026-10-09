@@ -11,6 +11,7 @@
 - Если в наборе есть `.skel` или `.json`, квадрат считается по их миру и тем же множителем крошится `.spine`, atlas и png.
 - Только `.spine`: рамка по локальным вершинам, в строке статуса стоит `~`.
 
-`app.js` больше не читает `process.env` — в браузере это роняло разбор `.skel`.
-`.spine` распаковывается через pako. Встроенный `DecompressionStream` в браузере отвечал `Failed to fetch`. В Chrome проверено: `spine  1842×1859~  ×0.161  71 bones  300`.
+`.spine` после масштаба снова заканчивается футером редактора (`02 0b 02 0b`, длина сжатого потока). Без него Spine 4.3.26 писал «The project footer is missing». factor=1 по-прежнему отдаёт исходные байты. `.skel` roundtrip не трогался.
+
+JSON: `animations` не выкидываются. Масштабируются translate / translatex / translatey, deform, softness у IK. Файл только с `animations` (без `bones`) больше не пропускается.
 

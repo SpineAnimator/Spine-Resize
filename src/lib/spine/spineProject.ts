@@ -3,7 +3,7 @@
  * factor === 1 returns the original bytes.
  */
 
-import { deflateRaw as pakoDeflateRaw, inflateRaw as pakoInflateRaw } from "pako";
+import { deflateRaw as pakoDeflateRaw, Inflate, inflateRaw as pakoInflateRaw } from "pako";
 
 export interface SpineScaleStats {
   bones: number;
@@ -231,12 +231,36 @@ export function scaleSpineInflated(
   };
 }
 
+const FOOTER_MAGIC = [0x02, 0x0b, 0x02, 0x0b];
+
+/** Raw deflate, then a 20-byte editor footer. Dropping the footer is "project footer is missing". */
+export function splitSpine(raw: Uint8Array): { inflated: Uint8Array; footer: Uint8Array } {
+  const inflator = new Inflate({ raw: true });
+  inflator.push(raw, true);
+  const inflated = inflator.result;
+  if (inflator.err || !(inflated instanceof Uint8Array) || inflated.length === 0) {
+    return { inflated: pakoInflateRaw(raw), footer: new Uint8Array(0) };
+  }
+  const consumed = inflator.strm?.total_in ?? raw.length;
+  const footer = consumed > 0 && consumed < raw.length ? raw.slice(consumed) : new Uint8Array(0);
+  return { inflated, footer };
+}
+
+function patchFooter(footer: Uint8Array, packedLen: number): Uint8Array {
+  if (footer.length < 20) return footer;
+  const at = footer.length - 4;
+  for (let i = 0; i < 4; i++) if (footer[at + i] !== FOOTER_MAGIC[i]) return footer;
+  const out = footer.slice();
+  new DataView(out.buffer, out.byteOffset, out.byteLength).setUint32(4, packedLen, false);
+  return out;
+}
+
 export async function inflateRaw(raw: Uint8Array): Promise<Uint8Array> {
-  return pakoInflateRaw(raw);
+  return splitSpine(raw).inflated;
 }
 
 export async function deflateRaw(data: Uint8Array): Promise<Uint8Array> {
-  return pakoDeflateRaw(data);
+  return pakoDeflateRaw(data, { level: 6 });
 }
 
 export async function scaleSpineFile(
@@ -245,13 +269,18 @@ export async function scaleSpineFile(
   offsetX = 0,
   offsetY = 0,
 ): Promise<{ bytes: Uint8Array; stats: SpineScaleStats }> {
-  const inflated = await inflateRaw(raw);
+  const { inflated, footer } = splitSpine(raw);
   if (factor === 1 && !offsetX && !offsetY) {
     const stats = scaleSpineInflated(inflated, 1).stats;
     return { bytes: raw, stats };
   }
   const scaled = scaleSpineInflated(inflated, factor, offsetX, offsetY);
-  return { bytes: await deflateRaw(scaled.bytes), stats: scaled.stats };
+  const packed = await deflateRaw(scaled.bytes);
+  const tail = patchFooter(footer, packed.length);
+  const bytes = new Uint8Array(packed.length + tail.length);
+  bytes.set(packed, 0);
+  bytes.set(tail, packed.length);
+  return { bytes, stats: scaled.stats };
 }
 
 /** Measure without scaling. Uses a copy. */

@@ -56,10 +56,35 @@ type Att = Record<string, unknown> & {
 type Skin = { attachments?: Record<string, Record<string, Att | null>> };
 type Slot = { name: string; bone?: string };
 type Curve = number[] | string;
-type Key = { time?: number; x?: number; y?: number; curve?: Curve; vertices?: number[] };
+type Key = {
+  time?: number;
+  x?: number;
+  y?: number;
+  value?: number;
+  softness?: number;
+  curve?: Curve;
+  vertices?: number[];
+  offset?: number;
+};
 type Anim = {
-  bones?: Record<string, { translate?: Key[]; scale?: Key[]; translatex?: Key[]; translatey?: Key[] }>;
-  attachments?: Record<string, Record<string, { deform?: Key[] }>>;
+  bones?: Record<string, {
+    translate?: Key[];
+    scale?: Key[];
+    translatex?: Key[];
+    translatey?: Key[];
+    shear?: Key[];
+    shearx?: Key[];
+    sheary?: Key[];
+  }>;
+  slots?: Record<string, Record<string, Key[]>>;
+  ik?: Record<string, Key[]>;
+  transform?: Record<string, Key[]>;
+  path?: Record<string, Record<string, Key[]>>;
+  physics?: Record<string, Record<string, Key[]>>;
+  deform?: unknown;
+  attachments?: Record<string, Record<string, { deform?: Key[] } | Key[]>>;
+  drawOrder?: unknown;
+  events?: unknown;
 };
 export type SpineJson = {
   skeleton?: Record<string, unknown>;
@@ -67,6 +92,8 @@ export type SpineJson = {
   slots?: Slot[];
   skins?: Skin[];
   animations?: Record<string, Anim>;
+  constraints?: Record<string, unknown>[];
+  ik?: Record<string, unknown>[];
   transform?: { x?: number; y?: number }[];
   path?: { position?: number; spacing?: number; positionMode?: string; spacingMode?: string }[];
 };
@@ -319,8 +346,38 @@ export function jsonAABB(data: SpineJson): Aabb {
   return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
 }
 
+function scaleDeformTree(node: unknown, s: number) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const key of node) {
+      if (!key || typeof key !== "object") continue;
+      const rec = key as Key;
+      if (Array.isArray(rec.vertices)) for (let i = 0; i < rec.vertices.length; i++) rec.vertices[i] *= s;
+      if (typeof rec.offset === "number") rec.offset *= s;
+    }
+    return;
+  }
+  for (const value of Object.values(node as Record<string, unknown>)) scaleDeformTree(value, s);
+}
+
+function scaleConstraintSetup(data: SpineJson, s: number) {
+  for (const c of data.constraints ?? []) {
+    if (typeof c.softness === "number") c.softness *= s;
+    if (c.type === "path" || c.type == null) {
+      const positionMode = c.positionMode;
+      const spacingMode = c.spacingMode;
+      if (typeof c.position === "number" && positionMode === "fixed") c.position *= s;
+      if (typeof c.spacing === "number" && (spacingMode === "length" || spacingMode == null) && c.type === "path") c.spacing *= s;
+    }
+  }
+  for (const c of data.ik ?? []) {
+    if (typeof c.softness === "number") c.softness *= s;
+  }
+}
+
 export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY = 0) {
   const s = factor;
+  const animNames = Object.keys(data.animations ?? {});
   for (const b of data.bones ?? []) {
     if (b.x != null) b.x *= s;
     if (b.y != null) b.y *= s;
@@ -357,15 +414,62 @@ export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY 
         if (k.y != null) k.y *= s;
         scaleCurve(k.curve, s, s);
       }
-      for (const k of tl.translatex ?? []) if (k.x != null) k.x *= s;
-      for (const k of tl.translatey ?? []) if (k.y != null) k.y *= s;
+      for (const k of tl.translatex ?? []) {
+        if (k.x != null) k.x *= s;
+        else if (k.value != null) k.value *= s;
+        scaleCurve(k.curve, s, s);
+      }
+      for (const k of tl.translatey ?? []) {
+        if (k.y != null) k.y *= s;
+        else if (k.value != null) k.value *= s;
+        scaleCurve(k.curve, s, s);
+      }
     }
-    for (const slot of Object.values(anim.attachments ?? {})) {
+    const attachments = anim.attachments ?? {};
+    for (const slot of Object.values(attachments)) {
+      if (!slot || typeof slot !== "object") continue;
       for (const tl of Object.values(slot)) {
-        for (const k of tl.deform ?? []) if (k.vertices) for (let i = 0; i < k.vertices.length; i++) k.vertices[i] *= s;
+        if (Array.isArray(tl)) {
+          for (const k of tl) if (k?.vertices) for (let i = 0; i < k.vertices.length; i++) k.vertices[i] *= s;
+        } else if (tl && Array.isArray(tl.deform)) {
+          for (const k of tl.deform) if (k.vertices) for (let i = 0; i < k.vertices.length; i++) k.vertices[i] *= s;
+        }
+      }
+    }
+    scaleDeformTree(anim.deform, s);
+    for (const keys of Object.values(anim.ik ?? {})) {
+      if (!Array.isArray(keys)) continue;
+      for (const k of keys) if (typeof k.softness === "number") k.softness *= s;
+    }
+    const pathMode = new Map<string, { position?: string; spacing?: string }>();
+    for (const c of data.constraints ?? []) {
+      if (c.type === "path" && typeof c.name === "string") {
+        pathMode.set(c.name, {
+          position: typeof c.positionMode === "string" ? c.positionMode : undefined,
+          spacing: typeof c.spacingMode === "string" ? c.spacingMode : undefined,
+        });
+      }
+    }
+    for (const [name, constraint] of Object.entries(anim.path ?? {})) {
+      if (!constraint || typeof constraint !== "object" || Array.isArray(constraint)) continue;
+      const mode = pathMode.get(name);
+      if (!mode || mode.position === "fixed") {
+        for (const k of constraint.position ?? []) if (typeof k.value === "number" && mode?.position === "fixed") k.value *= s;
+      }
+      if (mode?.spacing === "length") {
+        for (const k of constraint.spacing ?? []) if (typeof k.value === "number") k.value *= s;
+      }
+    }
+    for (const constraint of Object.values(anim.physics ?? {})) {
+      if (!constraint || typeof constraint !== "object") continue;
+      for (const name of ["x", "y", "wind", "gravity"] as const) {
+        const keys = constraint[name];
+        if (!Array.isArray(keys)) continue;
+        for (const k of keys) if (typeof k.value === "number") k.value *= s;
       }
     }
   }
+  scaleConstraintSetup(data, s);
   for (const c of data.transform ?? []) {
     if (c.x != null) c.x *= s;
     if (c.y != null) c.y *= s;
@@ -380,6 +484,9 @@ export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY 
     for (const key of ["x", "y", "width", "height"] as const) {
       if (typeof sk[key] === "number") sk[key] = (sk[key] as number) * s;
     }
+  }
+  if (animNames.length && Object.keys(data.animations ?? {}).length !== animNames.length) {
+    throw new Error("animations were dropped");
   }
 }
 

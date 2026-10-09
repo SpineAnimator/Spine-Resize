@@ -79,7 +79,11 @@ export async function zipEntries(entries: SpineEntry[]): Promise<Blob> {
 function parseJson(data: Uint8Array): SpineJson | null {
   try {
     const value = JSON.parse(decodeText(data)) as SpineJson;
-    if (!value || !Array.isArray(value.bones)) return null;
+    if (!value || typeof value !== "object") return null;
+    const hasBones = Array.isArray(value.bones);
+    const hasAnims = !!value.animations && typeof value.animations === "object" && !Array.isArray(value.animations);
+    if (!hasBones && !hasAnims) return null;
+    if (!hasBones) value.bones = [];
     return value;
   } catch {
     return null;
