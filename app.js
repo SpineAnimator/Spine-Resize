@@ -2408,6 +2408,11 @@
   var import_jszip = __toESM(require_jszip_min(), 1);
 
   // src/lib/spine/spineSkel.ts
+  function skelFlag(name) {
+    const env = globalThis.process?.env;
+    return !!env?.[name];
+  }
+  var skelDebugOnce = true;
   var ATT_REGION = 0;
   var ATT_BBOX = 1;
   var ATT_MESH = 2;
@@ -2908,18 +2913,18 @@
       w.vi(sl.slotIndex);
       w.vi(sl.atts.length);
       for (const a of sl.atts) {
-        if (process.env.SKEL_POS) console.log("ph", w.a.length, a.placeholder, a.att.type);
+        if (skelFlag("SKEL_POS")) console.log("ph", w.a.length, a.placeholder, a.att.type);
         w.strRef(a.placeholder);
         const before = w.a.length;
         writeAttachment(w, a.att, factor, nonessential);
         const raw = a.att._raw;
-        if (raw && factor === 1 && process.env.SKEL_DEBUG) {
+        if (raw && factor === 1 && skelDebugOnce && skelFlag("SKEL_DEBUG")) {
           const got = w.a.slice(before);
           if (got.length !== raw.length || got.some((b, i) => b !== raw[i])) {
             console.log("ATT MISMATCH", a.att.type, "ph", a.placeholder, "got", got.length, "raw", raw.length, "flags", a.att.flags);
             console.log("raw", [...raw.slice(0, 24)]);
             console.log("got", got.slice(0, 24));
-            process.env.SKEL_DEBUG = "";
+            skelDebugOnce = false;
           }
         }
       }
@@ -3077,7 +3082,7 @@
       }
       sk.bones.push(bone);
     }
-    if (process.env.SKEL_DEBUG) console.log("after bones", r.o);
+    if (skelFlag("SKEL_DEBUG")) console.log("after bones", r.o);
     const nslots = r.vi();
     for (let i = 0; i < nslots; i++) {
       const start = r.o;
@@ -3090,7 +3095,7 @@
       if (nonessential) r.ub();
       sk.slots.push(r.bytes.slice(start, r.o));
     }
-    if (process.env.SKEL_DEBUG) console.log("after slots", r.o);
+    if (skelFlag("SKEL_DEBUG")) console.log("after slots", r.o);
     const cc = r.vi();
     let sliderCount = 0;
     for (let i = 0; i < cc; i++) {
@@ -3177,7 +3182,7 @@
         }
       }
     }
-    if (process.env.SKEL_DEBUG) console.log("after constraints", r.o, "sliders", sliderCount);
+    if (skelFlag("SKEL_DEBUG")) console.log("after constraints", r.o, "sliders", sliderCount);
     const def = readSkin(r, nonessential, true);
     if (def) sk.skins.push(def);
     const extra = r.vi();
@@ -3185,7 +3190,7 @@
       const s = readSkin(r, nonessential, false);
       if (s) sk.skins.push(s);
     }
-    if (process.env.SKEL_DEBUG) console.log("after skins", r.o);
+    if (skelFlag("SKEL_DEBUG")) console.log("after skins", r.o);
     const ne = r.vi();
     for (let i = 0; i < ne; i++) {
       const start = r.o;
@@ -3199,10 +3204,10 @@
       }
       sk.events.push(r.bytes.slice(start, r.o));
     }
-    if (process.env.SKEL_DEBUG) console.log("after events", r.o);
+    if (skelFlag("SKEL_DEBUG")) console.log("after events", r.o);
     const na = r.vi();
     for (let i = 0; i < na; i++) sk.animations.push(readAnimationFull(r, nonessential));
-    if (process.env.SKEL_DEBUG) console.log("anim", sk.animations.length, r.o);
+    if (skelFlag("SKEL_DEBUG")) console.log("anim", sk.animations.length, r.o);
     for (let i = 0; i < sliderCount; i++) sk.sliderAnims.push(r.vi());
     if (r.o !== bytes.length) {
       throw new Error(`skel parse stopped at ${r.o} of ${bytes.length}`);
@@ -3305,7 +3310,7 @@
       }
       anim.slots.push({ slotIndex, items });
     }
-    if (process.env.SKEL_POS) console.log("read anim bones", r.o, name);
+    if (skelFlag("SKEL_POS")) console.log("read anim bones", r.o, name);
     n = r.vi();
     for (let i = 0; i < n; i++) {
       const boneIndex = r.vi();
@@ -3590,14 +3595,14 @@
         for (const b of c.raw) w.u8(b);
       }
     }
-    if (process.env.SKEL_DEBUG) console.log("write before skins", w.a.length);
+    if (skelFlag("SKEL_DEBUG")) console.log("write before skins", w.a.length);
     const def = sk.skins.find((s) => s.defaultSkin);
     if (def) writeSkin(w, def, factor, sk.nonessential);
     else w.vi(0);
     const extras = sk.skins.filter((s) => !s.defaultSkin);
     w.vi(extras.length);
     for (const s of extras) writeSkin(w, s, factor, sk.nonessential);
-    if (process.env.SKEL_DEBUG) console.log("write after skins", w.a.length);
+    if (skelFlag("SKEL_DEBUG")) console.log("write after skins", w.a.length);
     w.vi(sk.events.length);
     for (const raw of sk.events) for (const b of raw) w.u8(b);
     w.vi(sk.animations.length);
@@ -3608,14 +3613,14 @@
   function writeAnim(w, a, factor, nonessential) {
     w.str(a.name);
     w.vi(a.timelineCount);
-    if (process.env.SKEL_POS) console.log("anim slots", w.a.length);
+    if (skelFlag("SKEL_POS")) console.log("anim slots", w.a.length);
     w.vi(a.slots.length);
     for (const s of a.slots) {
       w.vi(s.slotIndex);
       w.vi(s.items.length);
       for (const it of s.items) for (const b of it.raw) w.u8(b);
     }
-    if (process.env.SKEL_POS) console.log("anim bones", w.a.length, a.name);
+    if (skelFlag("SKEL_POS")) console.log("anim bones", w.a.length, a.name);
     w.vi(a.bones.length);
     for (const g of a.bones) {
       w.vi(g.boneIndex);
@@ -3641,7 +3646,7 @@
       };
       for (const c of chunks) walk(c);
     };
-    if (process.env.SKEL_POS) console.log("anim rest", w.a.length);
+    if (skelFlag("SKEL_POS")) console.log("anim rest", w.a.length);
     dump(a.ik);
     dump(a.transform);
     dump(a.path);
@@ -4638,7 +4643,7 @@
   var files = [];
   var busy = false;
   function paint() {
-    list.textContent = "";
+    list.replaceChildren();
     for (const file of files) {
       const row = document.createElement("span");
       row.textContent = file.name;

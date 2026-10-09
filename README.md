@@ -8,7 +8,7 @@ Geometry (bone positions, lengths, attachment sizes, mesh vertices, animation tr
 
 - Pure browser — files never leave your machine
 - Drag-and-drop ZIP (or individual files)
-- Supports: `*.json` (Spine runtime), `*.atlas`, `*.png` / image folders, nested ZIPs
+- Supports: `*.json`, `*.skel`, `*.spine`, `*.atlas`, images, nested ZIPs
 - Target size configurable
 - Bake non-1 scales (recommended for IK)
 - Center result around origin
@@ -20,7 +20,7 @@ Geometry (bone positions, lengths, attachment sizes, mesh vertices, animation tr
 1. Open https://spineanimator.github.io/Spine-Resize/
 2. Drop a ZIP that contains the Spine JSON export + images (and optionally `.atlas`)
 3. Set target size (300 by default)
-4. Click **Resize & Download**
+4. Click **Resize**
 
 The resulting ZIP contains the scaled JSON, resized PNGs and (if present) a scaled atlas.
 
@@ -30,9 +30,11 @@ When many characters live under one root and you switch them by visibility / ski
 
 ## Limitations
 
-- `.spine` (editor project) and binary `.skel` are detected but not fully rewritten yet — export JSON from the Spine editor first.
-- Weighted meshes and complex path constraints receive a best-effort scale; verify in the Spine editor after import.
-- Bounding box is computed from the **setup pose** of the default skin. If the first animation frame differs a lot, you may need a small manual tweak.
+- `.json`, binary `.skel` (Spine 4.2/4.3) and editor `.spine` are rewritten in the browser.
+- `.skel` roundtrip at factor 1 is byte-identical. Bake pushes a bone's scale into children and attachments, then sets that bone's scale to 1. A bone's own scale does not move its x/y.
+- `.spine` is raw deflate. Bone x/y/length, region size and mesh vertices scale. The parent index inside `.spine` is still unknown, so non-uniform scale is not baked there. Drop a `.skel` or `.json` with it and they share one factor.
+- Weighted deform keys in `.skel` animations are still copied through, not scaled.
+- The box is the setup pose. A later animation frame can stick out of the square.
 
 ## License
 
