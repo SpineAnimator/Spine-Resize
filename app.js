@@ -8838,13 +8838,16 @@
   function scaleAtlas(text, factor) {
     if (!text || factor === 1) return text;
     return text.split(/\r?\n/).map((line2) => {
-      const m = line2.match(/^(size|orig|offset|xy):\s*/i);
+      const m = line2.match(/^(\s*)(bounds|offsets|offset|orig|size|xy):(\s*)(.*)$/i);
       if (!m) return line2;
-      const nums = line2.slice(m[0].length).split(",").map((x) => x.trim());
-      if (nums.length < 2 || Number.isNaN(+nums[0]) || Number.isNaN(+nums[1])) return line2;
-      const a = Math.round(+nums[0] * factor);
-      const b = Math.round(+nums[1] * factor);
-      return m[0] + a + "," + b + (nums.length > 2 ? "," + nums.slice(2).join(",") : "");
+      const key = m[2].toLowerCase();
+      const nums = m[4].split(",").map((x) => x.trim());
+      const count = key === "bounds" || key === "offsets" ? 4 : 2;
+      if (nums.length < count) return line2;
+      for (let i = 0; i < count; i++) if (nums[i] === "" || Number.isNaN(+nums[i])) return line2;
+      const scaled = nums.slice(0, count).map((n) => String(Math.round(+n * factor)));
+      const tail = nums.slice(count);
+      return m[1] + m[2] + ":" + m[3] + scaled.join(",") + (tail.length ? "," + tail.join(",") : "");
     }).join("\n");
   }
 
@@ -8858,6 +8861,10 @@
     const name = baseName(path).toLowerCase();
     const dot = name.lastIndexOf(".");
     return dot >= 0 ? name.slice(dot) : "";
+  }
+  function isAtlas(path) {
+    const name = baseName(path).toLowerCase();
+    return name.endsWith(".atlas") || name.endsWith(".atlas.txt");
   }
   function isZip(data) {
     return data.length > 3 && data[0] === 80 && data[1] === 75;
@@ -8960,7 +8967,7 @@
         if (opts.bake) bakeSkelScales(sk);
         skels.push({ path: entry.path, sk, box: skelWorldAABB(sk) });
       } else if (ext === ".spine") spines.push(entry);
-      else if (ext === ".atlas") atlases.push(entry);
+      else if (isAtlas(entry.path)) atlases.push(entry);
       else if (IMAGE_EXT.has(ext)) images.push(entry);
       else rest.push(entry);
     }
@@ -9050,6 +9057,12 @@
   var center = document.getElementById("center");
   var files = [];
   var busy = false;
+  var zipUrl = "";
+  function revokeZip() {
+    if (!zipUrl) return;
+    URL.revokeObjectURL(zipUrl);
+    zipUrl = "";
+  }
   function paint() {
     list.replaceChildren();
     for (const file of files) {
@@ -9099,15 +9112,15 @@
         center: center.getAttribute("aria-pressed") === "true"
       });
       const blob = await zipEntries(result.entries);
+      revokeZip();
       const url = URL.createObjectURL(blob);
+      zipUrl = url;
       const a = document.createElement("a");
       a.href = url;
       a.download = "resized.zip";
-      document.body.appendChild(a);
+      a.textContent = "resized.zip";
+      line.replaceChildren(document.createTextNode(result.line + "  "), a);
       a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2e3);
-      line.textContent = result.line;
     } catch (error) {
       line.textContent = error instanceof Error ? error.message : "failed";
     } finally {

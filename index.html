@@ -51,7 +51,8 @@
     #list span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #go { height: 48px; background: #f2f2f2; color: #000; border-color: #f2f2f2; font-weight: 500; font-size: 1rem; }
     #go:disabled { opacity: 0.3; cursor: default; }
-    #line { margin: 0; font-size: 0.875rem; color: #8a8a8a; white-space: normal; overflow: hidden; }
+    #line { margin: 0; font-size: 0.875rem; color: #8a8a8a; white-space: normal; overflow: visible; }
+    #line a { color: #f2f2f2; }
     @media (min-width: 640px) { main { padding: 24px; } }
   </style>
 </head>
@@ -70,7 +71,7 @@
     <button id="go" type="button" disabled>Resize</button>
     <p id="line">.json Import Data · .spine Open</p>
   </main>
-  <input id="file" type="file" multiple hidden accept=".zip,.json,.skel,.spine,.atlas,.png,.jpg,.jpeg,.webp" />
+  <input id="file" type="file" multiple hidden accept=".zip,.json,.skel,.spine,.atlas,.txt,.png,.jpg,.jpeg,.webp" />
   <script src="app.js"></script>
 </body>
 </html>

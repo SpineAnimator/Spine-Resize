@@ -26,6 +26,11 @@ function baseName(path: string) {
   return parts[parts.length - 1] || path;
 }
 
+function isAtlas(path: string) {
+  const name = baseName(path).toLowerCase();
+  return name.endsWith(".atlas") || name.endsWith(".atlas.txt");
+}
+
 function extOf(path: string) {
   const name = baseName(path).toLowerCase();
   const dot = name.lastIndexOf(".");
@@ -146,7 +151,7 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
       if (opts.bake) bakeSkelScales(sk);
       skels.push({ path: entry.path, sk, box: skelWorldAABB(sk) });
     } else if (ext === ".spine") spines.push(entry);
-    else if (ext === ".atlas") atlases.push(entry);
+    else if (isAtlas(entry.path)) atlases.push(entry);
     else if (IMAGE_EXT.has(ext)) images.push(entry);
     else rest.push(entry);
   }

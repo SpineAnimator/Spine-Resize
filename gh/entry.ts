@@ -11,6 +11,13 @@ const center = document.getElementById("center") as HTMLButtonElement;
 
 let files: File[] = [];
 let busy = false;
+let zipUrl = "";
+
+function revokeZip() {
+  if (!zipUrl) return;
+  URL.revokeObjectURL(zipUrl);
+  zipUrl = "";
+}
 
 function paint() {
   list.replaceChildren();
@@ -63,15 +70,15 @@ go.addEventListener("click", async () => {
       center: center.getAttribute("aria-pressed") === "true",
     });
     const blob = await zipEntries(result.entries);
+    revokeZip();
     const url = URL.createObjectURL(blob);
+    zipUrl = url;
     const a = document.createElement("a");
     a.href = url;
     a.download = "resized.zip";
-    document.body.appendChild(a);
+    a.textContent = "resized.zip";
+    line.replaceChildren(document.createTextNode(result.line + "  "), a);
     a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    line.textContent = result.line;
   } catch (error) {
     line.textContent = error instanceof Error ? error.message : "failed";
   } finally {

@@ -33,6 +33,7 @@ When many characters live under one root and you switch them by visibility / ski
 - `.json`, binary `.skel` (Spine 4.2/4.3) and editor `.spine` are rewritten in the browser.
 - `.skel` roundtrip at factor 1 is byte-identical. Bake pushes a bone's scale into children and attachments, then sets that bone's scale to 1. A bone's own scale does not move its x/y.
 - `.spine` is raw deflate plus a 20-byte footer (`02 0b 02 0b`, compressed length at byte 4). Bone x/y/length, region size, mesh vertices and animation translate keys scale. Translate is found from the timeline header `84 01 01 01 01`, not from a bare `01 01` scan. Rotate and scale keys are left alone. The parent index inside `.spine` is still unknown, so non-uniform scale is not baked there. Drop a `.skel` or `.json` with it and they share one factor.
+- Atlas region lines are indented. `xy`, `size`, `orig`, `offset`, and the four numbers in Spine 4 `bounds` / `offsets`, scale with the image. A file named `.atlas.txt` is an atlas. `rotate` and `index` are not distances.
 - Weighted deform keys in `.skel` animations are still copied through, not scaled.
 - The box is the setup pose. A later animation frame can stick out of the square.
 
