@@ -36,9 +36,9 @@
     mod
   ));
 
-  // ../../../workspace/node_modules/jszip/dist/jszip.min.js
+  // node_modules/jszip/dist/jszip.min.js
   var require_jszip_min = __commonJS({
-    "../../../workspace/node_modules/jszip/dist/jszip.min.js"(exports, module) {
+    "node_modules/jszip/dist/jszip.min.js"(exports, module) {
       !(function(e) {
         if ("object" == typeof exports && "undefined" != typeof module) module.exports = e();
         else if ("function" == typeof define && define.amd) define([], e);
@@ -2404,10 +2404,10 @@
     }
   });
 
-  // ../../../workspace/src/lib/spine/resizeProject.ts
+  // src/lib/spine/resizeProject.ts
   var import_jszip = __toESM(require_jszip_min(), 1);
 
-  // ../../../workspace/src/lib/spine/spineSkel.ts
+  // src/lib/spine/spineSkel.ts
   function skelFlag(name) {
     const env = globalThis.process?.env;
     return !!env?.[name];
@@ -3933,7 +3933,7 @@
     return finishAabb(box);
   }
 
-  // ../../../workspace/node_modules/pako/dist/pako.mjs
+  // node_modules/pako/dist/pako.mjs
   var Z_FIXED = 4;
   var Z_BINARY = 0;
   var Z_TEXT = 1;
@@ -7387,7 +7387,7 @@
     });
   }
 
-  // ../../../workspace/src/lib/spine/spineProject.ts
+  // src/lib/spine/spineProject.ts
   var BONE_ANCHOR = [34, 0, 0, 0, 0, 14];
   var REGION_ANCHOR = [15, 0, 14, 30, 1, 255, 255, 255, 255];
   function getF(data, o) {
@@ -7590,7 +7590,7 @@
     return scaleSpineInflated(inflated, 1).stats;
   }
 
-  // ../../../workspace/src/lib/spine/resizeCore.ts
+  // src/lib/spine/resizeCore.ts
   function fitFactor(box, target) {
     const m = Math.max(box.width, box.height);
     if (!Number.isFinite(m) || m < 1) return 1;
@@ -7911,7 +7911,7 @@
     }).join("\n");
   }
 
-  // ../../../workspace/src/lib/spine/resizeProject.ts
+  // src/lib/spine/resizeProject.ts
   var IMAGE_EXT = /* @__PURE__ */ new Set([".png", ".jpg", ".jpeg", ".webp"]);
   function baseName(path) {
     const parts = path.split("/");
@@ -8081,7 +8081,7 @@
     return { entries: out, factor, line: line2 };
   }
 
-  // ../../../workspace/gh/entry.ts
+  // gh/entry.ts
   var drop = document.getElementById("drop");
   var input = document.getElementById("file");
   var list = document.getElementById("list");
