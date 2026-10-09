@@ -96,6 +96,94 @@ function regionOffsets(data: Uint8Array, i: number): { x: number; y: number; w: 
   return { h: i - 14, y: i - 9, x: i - 4, w: after + 6 };
 }
 
+const TRANSLATE_HDR = [0x84, 0x01, 0x01, 0x01, 0x01];
+const KEY_SIG = [0x85, 0x01, 0x01];
+/** Big-endian 4F 00 00 00. Sentinel inside a curve block, not a distance. */
+const CURVE_SENTINEL = 0x4f000000;
+
+function u32be(data: Uint8Array, o: number) {
+  return new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(o, false);
+}
+
+function isKeySig(data: Uint8Array, o: number) {
+  return o + 3 <= data.length && data[o] === KEY_SIG[0] && data[o + 1] === KEY_SIG[1] && data[o + 2] === KEY_SIG[2];
+}
+
+/** One axis of a 41-byte curve: 5 big-endian floats.
+ * partial: sentinel, sentinel, time, value, 0
+ * full: time, value, time, value, 0
+ * shifted: time, value, sentinel, sentinel, 0
+ * Times and the sentinel stay. Value slots scale. */
+function scaleCurveAxis(
+  data: Uint8Array,
+  base: number,
+  mark: (o: number) => void,
+  used: Set<number>,
+  locked: Set<number>,
+) {
+  if (base + 20 > data.length) return;
+  if (u32be(data, base + 16) !== 0) return;
+  const sent = (i: number) => u32be(data, base + i * 4) === CURVE_SENTINEL;
+  const take = (i: number) => {
+    const o = base + i * 4;
+    if (sent(i) || locked.has(o) || used.has(o)) return;
+    mark(o);
+  };
+  if (sent(0) && sent(1)) take(3);
+  else if (sent(2) && sent(3)) take(1);
+  else {
+    take(1);
+    take(3);
+  }
+}
+
+function scaleTranslateTimelines(
+  data: Uint8Array,
+  mark: (o: number) => void,
+  used: Set<number>,
+  locked: Set<number>,
+): number {
+  let pairs = 0;
+  for (const i of findAll(data, TRANSLATE_HDR)) {
+    const count = data[i + 5];
+    if (count < 1 || count > 64 || i + 9 > data.length || !isKeySig(data, i + 6)) continue;
+    const keys = [i + 6];
+    let p = i + 6;
+    let ok = true;
+    for (let n = 1; n < count; n++) {
+      if (p + 15 >= data.length) {
+        ok = false;
+        break;
+      }
+      if (data[p + 15] === 0 && isKeySig(data, p + 16)) {
+        p += 16;
+        keys.push(p);
+        continue;
+      }
+      if (p + 56 < data.length && isKeySig(data, p + 56)) {
+        p += 56;
+        keys.push(p);
+        continue;
+      }
+      ok = false;
+      break;
+    }
+    if (!ok || keys.length !== count || keys[count - 1] + 15 > data.length) continue;
+    for (let n = 0; n < keys.length; n++) {
+      const k = keys[n];
+      for (const o of [k + 7, k + 11]) {
+        if (!locked.has(o) && !used.has(o)) mark(o);
+      }
+      pairs++;
+      if (n + 1 < keys.length && keys[n + 1] - k === 56) {
+        scaleCurveAxis(data, k + 16, mark, used, locked);
+        scaleCurveAxis(data, k + 36, mark, used, locked);
+      }
+    }
+  }
+  return pairs;
+}
+
 export function scaleSpineInflated(
   src: Uint8Array,
   factor: number,
@@ -187,10 +275,10 @@ export function scaleSpineInflated(
     i = end - 1;
   }
 
-  // Translate-пары 01 01 … 01 раньше считались «анимацией» и пропускали ключи
-  // меньше 8px, либо портили соседние float. Кости, регионы и меши уже
-  // масштабируются якорями. Таймлайны здесь не трогаем.
-  const animPairs = 0;
+  // Translate timelines only. Header 84 01 01 01 01 <count> then `count` keys.
+  // Rotate is type 00, scale is type 02 — same 85 01 01 key signature, not touched.
+  // A bare 01 01 matches bones and meshes; do not scan for it.
+  const animPairs = scaleTranslateTimelines(data, mark, used, locked);
 
   // Root local x/y is world position when the root is unrotated, which matches .skel centering.
   if (root && (offsetX || offsetY)) {

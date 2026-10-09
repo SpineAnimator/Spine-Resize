@@ -8209,6 +8209,71 @@
     if (data[after + 10] !== 13 || data[after + 11] !== 10 || data[after + 12] !== 1 || data[after + 13] !== 1) return null;
     return { h: i - 14, y: i - 9, x: i - 4, w: after + 6 };
   }
+  var TRANSLATE_HDR = [132, 1, 1, 1, 1];
+  var CURVE_SENTINEL = 1325400064;
+  function u32be(data, o) {
+    return new DataView(data.buffer, data.byteOffset, data.byteLength).getUint32(o, false);
+  }
+  function isKeySig(data, o) {
+    return o + 3 <= data.length && data[o] === 133 && data[o + 1] === 1 && data[o + 2] === 1;
+  }
+  function scaleCurveAxis(data, base, mark, used, locked) {
+    if (base + 20 > data.length) return;
+    if (u32be(data, base + 16) !== 0) return;
+    const sent = (i) => u32be(data, base + i * 4) === CURVE_SENTINEL;
+    const take = (i) => {
+      const o = base + i * 4;
+      if (sent(i) || locked.has(o) || used.has(o)) return;
+      mark(o);
+    };
+    if (sent(0) && sent(1)) take(3);
+    else if (sent(2) && sent(3)) take(1);
+    else {
+      take(1);
+      take(3);
+    }
+  }
+  function scaleTranslateTimelines(data, mark, used, locked) {
+    let pairs = 0;
+    for (const i of findAll(data, TRANSLATE_HDR)) {
+      const count = data[i + 5];
+      if (count < 1 || count > 64 || i + 9 > data.length || !isKeySig(data, i + 6)) continue;
+      const keys = [i + 6];
+      let p = i + 6;
+      let ok = true;
+      for (let n = 1; n < count; n++) {
+        if (p + 15 >= data.length) {
+          ok = false;
+          break;
+        }
+        if (data[p + 15] === 0 && isKeySig(data, p + 16)) {
+          p += 16;
+          keys.push(p);
+          continue;
+        }
+        if (p + 56 < data.length && isKeySig(data, p + 56)) {
+          p += 56;
+          keys.push(p);
+          continue;
+        }
+        ok = false;
+        break;
+      }
+      if (!ok || keys.length !== count || keys[count - 1] + 15 > data.length) continue;
+      for (let n = 0; n < keys.length; n++) {
+        const k = keys[n];
+        for (const o of [k + 7, k + 11]) {
+          if (!locked.has(o) && !used.has(o)) mark(o);
+        }
+        pairs++;
+        if (n + 1 < keys.length && keys[n + 1] - k === 56) {
+          scaleCurveAxis(data, k + 16, mark, used, locked);
+          scaleCurveAxis(data, k + 36, mark, used, locked);
+        }
+      }
+    }
+    return pairs;
+  }
   function scaleSpineInflated(src, factor, offsetX = 0, offsetY = 0) {
     const data = new Uint8Array(src);
     const used = /* @__PURE__ */ new Set();
@@ -8291,7 +8356,7 @@
       }
       i = end - 1;
     }
-    const animPairs = 0;
+    const animPairs = scaleTranslateTimelines(data, mark, used, locked);
     if (root && (offsetX || offsetY)) {
       if (offsetX) setF(data, root.x, getF(data, root.x) + offsetX);
       if (offsetY) setF(data, root.y, getF(data, root.y) + offsetY);
