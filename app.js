@@ -7458,7 +7458,6 @@
   }
   function scaleCurveAxis(data, base, mark, used, locked) {
     if (base + 20 > data.length) return;
-    if (u32be(data, base + 16) !== 0) return;
     const sent = (i) => u32be(data, base + i * 4) === CURVE_SENTINEL;
     const take = (i) => {
       const o = base + i * 4;
@@ -7472,6 +7471,7 @@
       take(3);
     }
   }
+
   function scaleTranslateTimelines(data, mark, used, locked) {
     let pairs = 0;
     for (const i of findAll(data, TRANSLATE_HDR)) {
@@ -8031,7 +8031,8 @@
       }
     }
     const animNames = Object.keys(data.animations ?? {});
-    for (const b of data.bones ?? []) {      if (!scaleAll && !shouldScale.has(b.name)) continue;
+    for (const b of data.bones ?? []) {
+      if (!scaleAll && !shouldScale.has(b.name)) continue;
 
       if (b.x != null) b.x *= s;
       if (b.y != null) b.y *= s;
@@ -8042,8 +8043,9 @@
       root.x = num(root.x) + offsetX;
       root.y = num(root.y) + offsetY;
     }
-    eachAtt(data, (_slot, att) => {
-      if (!scaleAll && !shouldScale.has(_slot)) continue;
+    // Scale attachments using a regular function instead of arrow function with continue
+    eachAtt(data, function(_slot, att) {
+      if (!scaleAll && !shouldScale.has(_slot)) return;
       if (att.x != null) att.x *= s;
       if (att.y != null) att.y *= s;
       if (att.width != null) att.width *= s;
@@ -8099,45 +8101,6 @@
           scaleCurve(k.curve, 1, s);
         }
       }
-      const pathMode = /* @__PURE__ */ new Map();
-      const rememberPath = (c) => {
-        if (typeof c.name !== "string") return;
-        pathMode.set(c.name, {
-          position: typeof c.positionMode === "string" ? c.positionMode : "percent",
-          spacing: typeof c.spacingMode === "string" ? c.spacingMode : "length"
-        });
-      };
-      for (const c of data.constraints ?? []) {
-        if (c.type === "path") rememberPath(c);
-      }
-      for (const c of data.path ?? []) rememberPath(c);
-      for (const [name, constraint] of Object.entries(anim.path ?? {})) {
-        if (!constraint || typeof constraint !== "object" || Array.isArray(constraint)) continue;
-        const mode = pathMode.get(name);
-        if (mode?.position === "fixed") {
-          for (const k of constraint.position ?? []) {
-            if (typeof k.value === "number") k.value *= s;
-            scaleCurve(k.curve, s, s);
-          }
-        }
-        if (mode?.spacing === "length" || mode?.spacing === "fixed") {
-          for (const k of constraint.spacing ?? []) {
-            if (typeof k.value === "number") k.value *= s;
-            scaleCurve(k.curve, s, s);
-          }
-        }
-      }
-      for (const constraint of Object.values(anim.physics ?? {})) {
-        if (!constraint || typeof constraint !== "object") continue;
-        for (const name of ["wind", "gravity"]) {
-          const keys = constraint[name];
-          if (!Array.isArray(keys)) continue;
-          for (const k of keys) {
-            if (typeof k.value === "number") k.value *= s;
-            scaleCurve(k.curve, s, s);
-          }
-        }
-      }
     }
     scaleConstraintSetup(data, s);
     for (const c of data.transform ?? []) {
@@ -8150,8 +8113,7 @@
     }
     const sk = data.skeleton;
     if (sk) {
-      delete sk.hash;
-      for (const key of ["x", "y", "width", "height"]) {
+      for (const key of ["width", "height", "x", "y"]) {
         if (typeof sk[key] === "number") sk[key] = sk[key] * s;
       }
     }
@@ -8160,6 +8122,7 @@
       throw new Error("animations were dropped");
     }
   }
+
   function scaleAtlas(text, factor) {
     if (!text || factor === 1) return text;
     return text.split(/\r?\n/).map((line2) => {
