@@ -37,15 +37,21 @@
     }
     .chip { height: 44px; padding: 0 12px; }
     .chip[aria-pressed="true"] { background: #f2f2f2; color: #000; border-color: #f2f2f2; }
-    .modes { display: flex; flex-direction: column; gap: 8px; }
+    .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .mode {
-      width: 100%;
+      width: auto;
       min-width: 0;
-      height: 44px;
-      display: flex;
+      height: auto;
+      min-height: 64px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas:
+        "radio name name"
+        "num num unit";
       align-items: center;
-      gap: 8px;
-      padding: 0 12px;
+      column-gap: 6px;
+      row-gap: 0;
+      padding: 6px 8px;
       font-size: 0.875rem;
       cursor: pointer;
     }
@@ -55,33 +61,36 @@
       border-color: #f2f2f2;
     }
     .mode input[type="radio"] {
+      grid-area: radio;
       appearance: none;
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       margin: 0;
       border: 1.5px solid currentColor;
       border-radius: 50%;
       background: transparent;
       color: inherit;
-      flex: 0 0 auto;
     }
     .mode input[type="radio"]:checked {
       background: radial-gradient(circle, currentColor 0 45%, transparent 50%);
     }
-    .mode .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mode .name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .mode input[type="number"] {
-      width: 4.6rem;
-      margin-left: auto;
+      grid-area: num;
+      width: 100%;
+      min-width: 0;
+      margin: 0;
       background: transparent;
       color: inherit;
       border: 0;
-      text-align: right;
+      text-align: left;
       font: inherit;
+      font-size: 1rem;
       outline: none;
     }
     .mode input[type="number"]::-webkit-outer-spin-button,
     .mode input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
-    .unit { width: 1.1rem; text-align: right; }
+    .unit { grid-area: unit; width: auto; text-align: right; }
     #drop {
       min-height: 0; display: flex; flex-direction: column; align-items: stretch; text-align: left; padding: 16px;
     }
@@ -93,7 +102,20 @@
     #go:disabled { opacity: 0.3; cursor: default; }
     #line { margin: 0; font-size: 0.875rem; color: #8a8a8a; white-space: normal; overflow: visible; }
     #line a { color: #f2f2f2; }
-    @media (min-width: 640px) { main { padding: 24px; } }
+    @media (min-width: 640px) {
+      main { padding: 24px; }
+      .mode {
+        height: 44px;
+        min-height: 44px;
+        grid-template-columns: auto minmax(0, 1fr) auto auto;
+        grid-template-areas: "radio name num unit";
+        column-gap: 8px;
+        padding: 0 12px;
+      }
+      .mode input[type="radio"] { width: 14px; height: 14px; }
+      .mode input[type="number"] { width: 4.4rem; text-align: right; font-size: inherit; }
+      .unit { width: 1.1rem; }
+    }
   </style>
 </head>
 <body>
@@ -106,19 +128,19 @@
     <div class="modes" role="radiogroup" aria-label="Resize method">
       <label class="mode" title="Fit the longer side to this many pixels">
         <input type="radio" name="scale-mode" value="side" checked />
-        <span class="name">Longest side in pixels</span>
+        <span class="name">Side</span>
         <input id="size" type="number" min="16" max="8192" value="300" inputmode="numeric" aria-label="Longest side in pixels" />
         <span class="unit">px</span>
       </label>
       <label class="mode" title="2 is twice as large, 0.5 is half">
         <input type="radio" name="scale-mode" value="times" />
-        <span class="name">Times larger or smaller</span>
+        <span class="name">Times</span>
         <input id="times" type="number" min="0.01" max="100" step="0.01" value="2" inputmode="decimal" aria-label="How many times larger or smaller" />
         <span class="unit">×</span>
       </label>
       <label class="mode" title="100 is twice as large, -50 is half, 0 is no change">
         <input type="radio" name="scale-mode" value="percent" />
-        <span class="name">Percent up or down</span>
+        <span class="name">Percent</span>
         <input id="percent" type="number" min="-99" max="9900" step="1" value="0" aria-label="Percent increase or decrease" />
         <span class="unit">%</span>
       </label>
