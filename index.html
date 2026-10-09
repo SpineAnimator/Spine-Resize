@@ -23,23 +23,27 @@
       margin: 0 auto;
       padding: 24px 32px;
       display: grid;
+      grid-template-columns: 2fr 1fr;
+      grid-template-rows: auto auto 1fr auto auto;
+      gap: 24px;
       grid-template-areas:
         "header header"
+        "settings settings"
         "drop tree"
-        "settings tree"
-        "actions tree"
-        "footer header";
-      gap: 24px;
+        "go go"
+        "line line";
     }
     @media (max-width: 768px) {
       main {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto 1fr auto auto;
         grid-template-areas:
-          "header header"
-          "drop drop"
-          "settings settings"
-          "tree tree"
-          "actions actions"
-          "footer header";
+          "header"
+          "settings"
+          "drop"
+          "tree"
+          "go"
+          "line";
       }
     }
     header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
@@ -111,29 +115,29 @@
       min-height: 0; display: flex; flex-direction: column; align-items: stretch; text-align: left; padding: 16px;
     }
     #drop.hot { background: #f2f2f2; color: #000; }
-    #list { margin-top: 12px; min-height: 0; overflow: auto; font-size: 0.875rem; line-height: 1.5; color: #f2f2f2; }
-    #drop.hot #list { color: #000; }
-    #list span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    #go { height: 48px; background: #f2f2f2; color: #000; border-color: #f2f2f2; font-weight: 500; font-size: 1rem; }
-    #go:disabled { opacity: 0.3; cursor: default; }
-    #line { margin: 0; font-size: 0.875rem; color: #8a8a8a; white-space: normal; overflow: visible; }
-    #line a { color: #f2f2f2; }
-    @media (min-width: 640px) {
-      main { padding: 24px; }
+    #list { margin-top: 12px; min-height=0; overflow:auto; font-size:0.875rem; line-height:1.5; color:#f2f2f2; }
+    #drop.hot #list { color:#000; }
+    #list span { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #go { height:48px; background:#f2f2f2; color:#000; border-color:#f2f2f2; font-weight:500; font-size:1rem; }
+    #go:disabled { opacity:0.3; cursor:default; }
+    #line { margin:0; font-size:0.875rem; color:#8a8a8a; white-space:normal; overflow:visible; }
+    #line a { color:#f2f2f2; }
+    @media (min-width:640px) {
+      main { padding:24px; }
       .mode {
-        height: 44px;
-        min-height: 44px;
-        grid-template-columns: auto minmax(0, 1fr) auto auto;
-        grid-template-areas: "radio name num unit";
-        column-gap: 8px;
-        padding: 0 12px;
+        height:44px;
+        min-height:44px;
+        grid-template-columns:auto minmax(0,1fr) auto auto;
+        grid-template-areas:"radio name num unit";
+        column-gap:8px;
+        padding:0 12px;
       }
-      .mode input[type="radio"] { width: 14px; height: 14px; }
-      .mode input[type="number"] { width: 4.4rem; text-align: right; font-size: inherit; }
-      .unit { width: 1.1rem; }
+      .mode input[type="radio"] { width:14px; height:14px; }
+      .mode input[type="number"] { width:4.4rem; text-align:right; font-size:inherit; }
+      .unit { width:1.1rem; }
     }
     /* Tree area */
-    .tree-area { height: 100%; }
+    .tree-area { height:100%; }
   </style>
 </head>
 <body>
@@ -143,16 +147,7 @@
       <button class="chip" id="bake" type="button" aria-pressed="true">Bake</button>
       <button class="chip" id="center" type="button" aria-pressed="true">Center</button>
     </header>
-    <div id="drop" class="tree-area">
-      <span>.json .skel .spine .atlas .png .zip</span>
-      <span id="list"></span>
-    </div>
-    <div id="tree" class="tree-area">
-      <div id="tree-placeholder" style="padding: 48px 24px; color: #666; font-size: 0.9rem;">
-        <div>Select a skeleton to view bone hierarchy</div>
-      </div>
-    </div>
-    <div class="modes" role="radiogroup" aria-label="Resize method">
+    <div class="modes settings" role="radiogroup" aria-label="Resize method">
       <label class="mode" title="Fit the longer side to this many pixels">
         <input type="radio" name="scale-mode" value="side" checked />
         <span class="name">Side</span>
@@ -171,6 +166,15 @@
         <input id="percent" type="number" min="-99" max="9900" step="1" value="0" aria-label="Percent increase or decrease" />
         <span class="unit">%</span>
       </label>
+    </div>
+    <div id="drop" class="tree-area">
+      <span>.json .skel .spine .atlas .png .zip</span>
+      <span id="list"></span>
+    </div>
+    <div id="tree" class="tree-area">
+      <div id="tree-placeholder" style="padding:24px 12px; color:#666; font-size:0.9rem;">
+        <div>Выберите скелет</div>
+      </div>
     </div>
     <button id="go" type="button" disabled>Resize</button>
     <p id="line">.json Import Data · .spine Open</p>
