@@ -497,11 +497,11 @@ export function scaleAtlas(text: string, factor: number) {
     .split(/\r?\n/)
     .map((line) => {
       // Region keys are indented. Spine 4 uses bounds/offsets (4 ints); older files use xy/size/orig/offset.
-      const m = line.match(/^(\s*)(bounds|offsets|offset|orig|size|xy):(\s*)(.*)$/i);
+      const m = line.match(/^(\s*)(bounds|offsets|split|pad|offset|orig|size|xy):(\s*)(.*)$/i);
       if (!m) return line;
       const key = m[2].toLowerCase();
       const nums = m[4].split(",").map((x) => x.trim());
-      const count = key === "bounds" || key === "offsets" ? 4 : 2;
+      const count = key === "bounds" || key === "offsets" || key === "split" || key === "pad" ? 4 : 2;
       if (nums.length < count) return line;
       for (let i = 0; i < count; i++) if (nums[i] === "" || Number.isNaN(+nums[i])) return line;
       const scaled = nums.slice(0, count).map((n) => String(Math.round(+n * factor)));

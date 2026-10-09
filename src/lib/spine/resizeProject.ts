@@ -37,6 +37,12 @@ function extOf(path: string) {
   return dot >= 0 ? name.slice(dot) : "";
 }
 
+function junkPath(path: string) {
+  if (path.includes("__MACOSX")) return true;
+  const base = baseName(path);
+  return base === ".DS_Store" || base.startsWith("._");
+}
+
 function isZip(data: Uint8Array) {
   return data.length > 3 && data[0] === 0x50 && data[1] === 0x4b;
 }
@@ -52,8 +58,7 @@ function encodeText(text: string) {
 async function walkZip(data: Uint8Array, prefix: string, out: SpineEntry[]) {
   const zip = await JSZip.loadAsync(data);
   for (const [path, entry] of Object.entries(zip.files)) {
-    if (entry.dir) continue;
-    if (path.includes("__MACOSX") || path.endsWith(".DS_Store")) continue;
+    if (entry.dir || junkPath(path)) continue;
     const buf = new Uint8Array(await entry.async("uint8array"));
     const full = prefix + path;
     if (extOf(full) === ".zip" || isZip(buf)) {
@@ -104,25 +109,29 @@ function larger(a: Aabb, b: Aabb) {
 }
 
 async function resizeRaster(data: Uint8Array, path: string, factor: number) {
-  if (!Number.isFinite(factor) || Math.abs(factor - 1) < 1e-8) return data;
-  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return data;
-  const ext = extOf(path);
-  const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png";
-  const bitmap = await createImageBitmap(new Blob([data.slice()]));
-  const width = Math.max(1, Math.round(bitmap.width * factor));
-  const height = Math.max(1, Math.round(bitmap.height * factor));
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return data;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, 0.92));
-  if (!blob) return data;
-  return new Uint8Array(await blob.arrayBuffer());
+  try {
+    if (!Number.isFinite(factor) || Math.abs(factor - 1) < 1e-8) return data;
+    if (typeof createImageBitmap !== "function" || typeof document === "undefined") return data;
+    const ext = extOf(path);
+    const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png";
+    const bitmap = await createImageBitmap(new Blob([data.slice()]));
+    const width = Math.max(1, Math.round(bitmap.width * factor));
+    const height = Math.max(1, Math.round(bitmap.height * factor));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return data;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, 0.92));
+    if (!blob) return data;
+    return new Uint8Array(await blob.arrayBuffer());
+  } catch {
+    return data;
+  }
 }
 
 export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) {

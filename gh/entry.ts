@@ -30,8 +30,22 @@ function paint() {
   if (!files.length && !busy) line.textContent = ".json Import Data · .spine Open";
 }
 
+function fileKey(file: File) {
+  return file.name + "\0" + file.size + "\0" + file.lastModified;
+}
+
 function add(batch: FileList | File[]) {
-  files = files.concat([...batch]);
+  const seen = new Set(files.map(fileKey));
+  let added = 0;
+  for (const file of batch) {
+    const key = fileKey(file);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    files.push(file);
+    added++;
+  }
+  if (!added) return;
+  revokeZip();
   line.textContent = `${files.length} files`;
   paint();
 }
@@ -61,6 +75,7 @@ go.addEventListener("click", async () => {
   if (!files.length || busy) return;
   busy = true;
   paint();
+  revokeZip();
   line.textContent = "…";
   try {
     const entries = await collectFiles(files);

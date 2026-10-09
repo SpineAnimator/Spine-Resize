@@ -8838,11 +8838,11 @@
   function scaleAtlas(text, factor) {
     if (!text || factor === 1) return text;
     return text.split(/\r?\n/).map((line2) => {
-      const m = line2.match(/^(\s*)(bounds|offsets|offset|orig|size|xy):(\s*)(.*)$/i);
+      const m = line2.match(/^(\s*)(bounds|offsets|split|pad|offset|orig|size|xy):(\s*)(.*)$/i);
       if (!m) return line2;
       const key = m[2].toLowerCase();
       const nums = m[4].split(",").map((x) => x.trim());
-      const count = key === "bounds" || key === "offsets" ? 4 : 2;
+      const count = key === "bounds" || key === "offsets" || key === "split" || key === "pad" ? 4 : 2;
       if (nums.length < count) return line2;
       for (let i = 0; i < count; i++) if (nums[i] === "" || Number.isNaN(+nums[i])) return line2;
       const scaled = nums.slice(0, count).map((n) => String(Math.round(+n * factor)));
@@ -8866,6 +8866,11 @@
     const name = baseName(path).toLowerCase();
     return name.endsWith(".atlas") || name.endsWith(".atlas.txt");
   }
+  function junkPath(path) {
+    if (path.includes("__MACOSX")) return true;
+    const base = baseName(path);
+    return base === ".DS_Store" || base.startsWith("._");
+  }
   function isZip(data) {
     return data.length > 3 && data[0] === 80 && data[1] === 75;
   }
@@ -8878,8 +8883,7 @@
   async function walkZip(data, prefix, out) {
     const zip = await import_jszip.default.loadAsync(data);
     for (const [path, entry] of Object.entries(zip.files)) {
-      if (entry.dir) continue;
-      if (path.includes("__MACOSX") || path.endsWith(".DS_Store")) continue;
+      if (entry.dir || junkPath(path)) continue;
       const buf = new Uint8Array(await entry.async("uint8array"));
       const full = prefix + path;
       if (extOf(full) === ".zip" || isZip(buf)) {
@@ -8924,25 +8928,29 @@
     return Math.max(a.width, a.height) >= Math.max(b.width, b.height) ? a : b;
   }
   async function resizeRaster(data, path, factor) {
-    if (!Number.isFinite(factor) || Math.abs(factor - 1) < 1e-8) return data;
-    if (typeof createImageBitmap !== "function" || typeof document === "undefined") return data;
-    const ext = extOf(path);
-    const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png";
-    const bitmap = await createImageBitmap(new Blob([data.slice()]));
-    const width = Math.max(1, Math.round(bitmap.width * factor));
-    const height = Math.max(1, Math.round(bitmap.height * factor));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return data;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(bitmap, 0, 0, width, height);
-    bitmap.close();
-    const blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, 0.92));
-    if (!blob) return data;
-    return new Uint8Array(await blob.arrayBuffer());
+    try {
+      if (!Number.isFinite(factor) || Math.abs(factor - 1) < 1e-8) return data;
+      if (typeof createImageBitmap !== "function" || typeof document === "undefined") return data;
+      const ext = extOf(path);
+      const mime = ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" : ext === ".webp" ? "image/webp" : "image/png";
+      const bitmap = await createImageBitmap(new Blob([data.slice()]));
+      const width = Math.max(1, Math.round(bitmap.width * factor));
+      const height = Math.max(1, Math.round(bitmap.height * factor));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return data;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, 0.92));
+      if (!blob) return data;
+      return new Uint8Array(await blob.arrayBuffer());
+    } catch {
+      return data;
+    }
   }
   async function resizeEntries(entries, opts) {
     const target = Math.max(16, Math.min(8192, Math.round(opts.target) || 300));
@@ -9073,8 +9081,21 @@
     go.disabled = !files.length || busy;
     if (!files.length && !busy) line.textContent = ".json Import Data \xB7 .spine Open";
   }
+  function fileKey(file) {
+    return file.name + "\0" + file.size + "\0" + file.lastModified;
+  }
   function add(batch) {
-    files = files.concat([...batch]);
+    const seen = new Set(files.map(fileKey));
+    let added = 0;
+    for (const file of batch) {
+      const key = fileKey(file);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      files.push(file);
+      added++;
+    }
+    if (!added) return;
+    revokeZip();
     line.textContent = `${files.length} files`;
     paint();
   }
@@ -9103,6 +9124,7 @@
     if (!files.length || busy) return;
     busy = true;
     paint();
+    revokeZip();
     line.textContent = "\u2026";
     try {
       const entries = await collectFiles(files);
