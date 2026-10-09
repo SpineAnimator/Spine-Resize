@@ -6,6 +6,8 @@ const list = document.getElementById("list") as HTMLElement;
 const go = document.getElementById("go") as HTMLButtonElement;
 const line = document.getElementById("line") as HTMLElement;
 const size = document.getElementById("size") as HTMLInputElement;
+const times = document.getElementById("times") as HTMLInputElement;
+const percent = document.getElementById("percent") as HTMLInputElement;
 const bake = document.getElementById("bake") as HTMLButtonElement;
 const center = document.getElementById("center") as HTMLButtonElement;
 
@@ -71,6 +73,17 @@ for (const button of [bake, center]) {
     button.setAttribute("aria-pressed", on ? "true" : "false");
   });
 }
+for (const field of [size, times, percent]) {
+  field.addEventListener("focus", () => {
+    const radio = field.parentElement?.querySelector<HTMLInputElement>('input[type="radio"]');
+    if (radio) radio.checked = true;
+  });
+}
+function scaleMode(): "side" | "times" | "percent" {
+  const picked = document.querySelector<HTMLInputElement>('input[name="scale-mode"]:checked');
+  if (picked?.value === "times" || picked?.value === "percent") return picked.value;
+  return "side";
+}
 go.addEventListener("click", async () => {
   if (!files.length || busy) return;
   busy = true;
@@ -81,6 +94,9 @@ go.addEventListener("click", async () => {
     const entries = await collectFiles(files);
     const result = await resizeEntries(entries, {
       target: Number(size.value) || 300,
+      times: Number(times.value),
+      percent: Number(percent.value),
+      mode: scaleMode(),
       bake: bake.getAttribute("aria-pressed") === "true",
       center: center.getAttribute("aria-pressed") === "true",
     });

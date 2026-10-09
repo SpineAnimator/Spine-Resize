@@ -13,10 +13,16 @@ import { bakeSkelScales, readSkel, scaleSkel, skelWorldAABB, writeSkel, type Aab
 
 export type SpineEntry = { path: string; data: Uint8Array };
 
+export type ScaleMode = "side" | "times" | "percent";
+
 export type ResizeOptions = {
   target: number;
   bake: boolean;
   center: boolean;
+  /** side = longest side in px. times = multiply by N. percent = grow or shrink by N%. */
+  mode?: ScaleMode;
+  times?: number;
+  percent?: number;
 };
 
 const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp"]);
@@ -140,8 +146,30 @@ async function resizeRaster(data: Uint8Array, path: string, factor: number) {
   }
 }
 
-export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) {
+
+function trimNum(n: number) {
+  return String(Math.round(n * 1000) / 1000);
+}
+
+/** Only the selected mode changes the factor. side keeps the old longest-side fit. */
+export function factorFor(box: Aabb, opts: ResizeOptions) {
   const target = Math.max(16, Math.min(8192, Math.round(opts.target) || 300));
+  if (opts.mode === "times") {
+    const raw = Number(opts.times);
+    const times = Math.max(0.01, Math.min(100, Number.isFinite(raw) ? raw : 1));
+    return { factor: times, asked: `×${trimNum(times)}` };
+  }
+  if (opts.mode === "percent") {
+    const raw = Number(opts.percent);
+    const percent = Math.max(-99, Math.min(9900, Math.round(Number.isFinite(raw) ? raw : 0)));
+    const factor = Math.max(0.01, Math.min(100, 1 + percent / 100));
+    const sign = percent > 0 ? "+" : "";
+    return { factor, asked: `${sign}${percent}%` };
+  }
+  return { factor: fitFactor(box, target), asked: String(target) };
+}
+
+export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) {
   type JsonJob = { path: string; data: SpineJson; box: Aabb };
   type SkelJob = { path: string; sk: ReturnType<typeof readSkel>; box: Aabb };
   const jsons: JsonJob[] = [];
@@ -193,7 +221,7 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
   if (box.width < 1 && box.height < 1 && !jsons.length && !skels.length && !spines.length) {
     throw new Error("No .json, .skel or .spine");
   }
-  const factor = fitFactor(box, target);
+  const { factor, asked } = factorFor(box, opts);
   const out: SpineEntry[] = [];
 
   for (const job of jsons) {
@@ -244,6 +272,6 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
   }
   if (spines.length) animBits.push(`${spineKeys} translate`);
   const animText = animBits.join("  ") || "0 anim";
-  const line = `${kind}  ${w}×${h}${approx ? "~" : ""}  ×${factor.toFixed(3)}  ${bones} bones  ${animText}  ${target}`;
+  const line = `${kind}  ${w}×${h}${approx ? "~" : ""}  ×${factor.toFixed(3)}  ${bones} bones  ${animText}  ${asked}`;
   return { entries: out, factor, line };
 }
