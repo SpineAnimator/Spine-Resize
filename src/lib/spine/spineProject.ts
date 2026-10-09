@@ -3,6 +3,8 @@
  * factor === 1 returns the original bytes.
  */
 
+import { deflateRaw as pakoDeflateRaw, inflateRaw as pakoInflateRaw } from "pako";
+
 export interface SpineScaleStats {
   bones: number;
   regions: number;
@@ -230,15 +232,11 @@ export function scaleSpineInflated(
 }
 
 export async function inflateRaw(raw: Uint8Array): Promise<Uint8Array> {
-  const ds = new DecompressionStream("deflate-raw");
-  const buf = await new Response(new Blob([raw.slice()]).stream().pipeThrough(ds)).arrayBuffer();
-  return new Uint8Array(buf);
+  return pakoInflateRaw(raw);
 }
 
 export async function deflateRaw(data: Uint8Array): Promise<Uint8Array> {
-  const cs = new CompressionStream("deflate-raw");
-  const buf = await new Response(new Blob([data.slice()]).stream().pipeThrough(cs)).arrayBuffer();
-  return new Uint8Array(buf);
+  return pakoDeflateRaw(data);
 }
 
 export async function scaleSpineFile(
