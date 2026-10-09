@@ -37,3 +37,9 @@ JSON: `animations` не выкидываются. Масштабируются t
 
 
 
+
+### 2026-10-09 later
+
+- Title/h1: «Spine Resize Skeleton» → «Spine Resize».
+- Roundtrip skel still 0 diff.
+- Agent notes appended in ДЛЯ-АГЕНТОВ.md.
