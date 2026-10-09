@@ -8008,10 +8008,31 @@
     const legacy = data;
     for (const c of legacy.physics ?? []) scalePhysicsBody(c, s);
   }
-  function scaleJson(data, factor, offsetX = 0, offsetY = 0) {
+  function scaleJson(data, factor, offsetX = 0, offsetY = 0, bonesToScale) {
     const s = factor;
+
+    // Determine which bones to scale
+    const scaleAll = !bonesToScale || bonesToScale.size === 0;
+    const shouldScale = new Set();
+    
+    if (scaleAll) {
+      // Scale all bones
+      const dataBones = data.bones ?? [];
+      for (const b of dataBones) {
+        shouldScale.add(b.name);
+      }
+    } else {
+      // Scale selected bones and their descendants
+      for (const name of bonesToScale) {
+        shouldScale.add(name);
+        // Add all children
+        const stack = [];
+        // We'll populate this during actual scaling
+      }
+    }
     const animNames = Object.keys(data.animations ?? {});
-    for (const b of data.bones ?? []) {
+    for (const b of data.bones ?? []) {      if (!scaleAll && !shouldScale.has(b.name)) continue;
+
       if (b.x != null) b.x *= s;
       if (b.y != null) b.y *= s;
       if (b.length != null) b.length *= s;
@@ -8022,6 +8043,7 @@
       root.y = num(root.y) + offsetY;
     }
     eachAtt(data, (_slot, att) => {
+      if (!scaleAll && !shouldScale.has(_slot)) continue;
       if (att.x != null) att.x *= s;
       if (att.y != null) att.y *= s;
       if (att.width != null) att.width *= s;
@@ -8224,6 +8246,7 @@
       const hasAnims = !!value.animations && typeof value.animations === "object" && !Array.isArray(value.animations);
       if (!hasBones && !hasAnims) return null;
       if (!hasBones) value.bones = [];
+      loadSkeletonForTree(value, baseName(entry.path));
       return value;
     } catch {
       return null;
@@ -8380,7 +8403,244 @@
     return { entries: out, factor, line: line2 };
   }
 
-  // gh/entry.ts
+  // Tree-based bone selection state
+let skeletonData = null;  // The loaded skeleton JSON
+let boneHierarchy = [];   // Flattened bone tree data
+let boneChildrenMap = new Map();  // bone -> [children]
+let selectedBones = new Set();    // Currently selected bone names
+let currentSkeletonName = null;   // Name of the current skeleton
+
+// DOM elements for tree UI
+let treeContainer = null;
+let treePlaceholder = null;
+let boneListContainer = null;
+
+// Initialize tree UI when DOM is ready
+function initTreeUI() {
+  treeContainer = document.getElementById('tree');
+  treePlaceholder = document.getElementById('tree-placeholder');
+  
+  // Create container for bone list
+  boneListContainer = document.createElement('div');
+  boneListContainer.style.display = 'none';
+  
+  // Show placeholder initially
+  if (treePlaceholder) {
+    treePlaceholder.style.display = 'block';
+    treeContainer.appendChild(boneListContainer);
+  }
+}
+
+// Parse skeleton data and build hierarchy for tree display
+function loadSkeletonForTree(jsonData, name) {
+  skeletonData = jsonData;
+  currentSkeletonName = name;
+  
+  if (!jsonData.bones || !Array.isArray(jsonData.bones)) {
+    if (treePlaceholder) treePlaceholder.textContent = 'No bones found in skeleton';
+    return;
+  }
+  
+  // Build bone hierarchy
+  const bonesByName = new Map();
+  for (const bone of jsonData.bones) {
+    bonesByName.set(bone.name, bone);
+  }
+  
+  // Build children map
+  for (const bone of jsonData.bones) {
+    if (bone.parent) {
+      if (!boneChildrenMap.has(bone.parent)) {
+        boneChildrenMap.set(bone.parent, []);
+      }
+      boneChildrenMap.get(bone.parent).push(bone.name);
+    }
+  }
+  
+  // Find root bones (no parent or parent not in skeleton)
+  const roots = [];
+  for (const bone of jsonData.bones) {
+    if (!bone.parent || !bonesByName.has(bone.parent)) {
+      roots.push(bone.name);
+    }
+  }
+  
+  // Build flattened hierarchy for display
+  boneHierarchy = [];
+  function visit(boneName, depth) {
+    const bone = bonesByName.get(boneName);
+    if (!bone) return;
+    
+    boneHierarchy.push({
+      name: boneName,
+      displayName: bone.name,
+      depth: depth,
+      hasChildren: boneChildrenMap.has(bone.name),
+      isControl: bone.name.includes('-control') || bone.icon === 'ik' || bone.name === 'root',
+      color: bone.color || '#ffffff'
+    });
+    
+    const children = boneChildrenMap.get(bone.name) || [];
+    for (const child of children) {
+      visit(child, depth + 1);
+    }
+  }
+  
+  for (const root of roots) {
+    visit(root, 0);
+  }
+  
+  // Update UI
+  updateBoneTree();
+}
+
+// Update the bone tree display
+function updateBoneTree() {
+  if (!treeContainer || !treePlaceholder || !boneListContainer) return;
+  
+  if (!boneHierarchy.length) {
+    if (treePlaceholder) treePlaceholder.textContent = 'No bone data available';
+    treePlaceholder.style.display = 'block';
+    boneListContainer.style.display = 'none';
+    return;
+  }
+  
+  treePlaceholder.style.display = 'none';
+  boneListContainer.style.display = 'block';
+  boneListContainer.innerHTML = '';
+  
+  // Create tree container
+  const treeWrapper = document.createElement('div');
+  treeWrapper.style.maxHeight = '400px';
+  treeWrapper.style.overflowY = 'auto';
+  treeWrapper.style.border = '1px solid #2a2a2a';
+  treeWrapper.style.borderRadius = '4px';
+  treeWrapper.style.padding = '8px';
+  treeWrapper.style.backgroundColor = '#1a1a1e';
+  
+  // Add header
+  const header = document.createElement('div');
+  header.style.display = 'flex';
+  header.style.alignItems = 'center';
+  header.style.justifyContent = 'space-between';
+  header.style.marginBottom = '8px';
+  header.style.fontSize = '0.8rem';
+  header.style.color = '#8b8b96';
+  header.innerHTML = '<span>Bones (' + boneHierarchy.length + ')</span>' +
+    '<div>' +
+    '<button id="selectAllBtn" class="chip" style="font-size:0.75rem;padding:4px 8px;margin-right:4px">Select all</button>' +
+    '<button id="clearSelBtn" class="chip" style="font-size:0.75rem;padding:4px 8px">Clear</button>' +
+    '</div>';
+  
+  // Add tree items
+  const treeItems = document.createElement('div');
+  treeItems.style.display = 'flex';
+  treeItems.style.flexDirection = 'column';
+  treeItems.style.gap = '2px';
+  
+  for (const node of boneHierarchy) {
+    const indent = '  '.repeat(node.depth);
+    const item = document.createElement('div');
+    item.style.display = 'flex';
+    item.style.alignItems = 'center';
+    item.style.padding = '4px 8px';
+    item.style.borderRadius = '2px';
+    item.style.cursor = 'pointer';
+    item.style.userSelect = 'none';
+    
+    if (selectedBones.has(node.name)) {
+      item.style.backgroundColor = '#2a2742';
+    }
+    
+    item.innerHTML = '<input type="checkbox" class="bone-checkbox" data-bone="' + node.name + '" ' + (selectedBones.has(node.name) ? 'checked' : '') + ' style="margin-right:8px;width:16px;height:16px;" />' +
+      '<span>' + indent + node.displayName + '</span>';
+    
+    item.addEventListener('click', (e) => {
+      if (e.target.type === 'checkbox') return;
+      const checkbox = item.querySelector('.bone-checkbox');
+      checkbox.checked = !checkbox.checked;
+      toggleBoneSelection(checkbox.dataset.bone, checkbox.checked);
+    });
+    
+    treeItems.appendChild(item);
+  }
+  
+  treeWrapper.appendChild(header);
+  treeWrapper.appendChild(treeItems);
+  boneListContainer.appendChild(treeWrapper);
+  
+  // Add event listeners for buttons
+  const selectAllBtn = document.getElementById('selectAllBtn');
+  const clearSelBtn = document.getElementById('clearSelBtn');
+  
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', () => {
+      for (const node of boneHierarchy) {
+        if (!node.isControl) {
+          toggleBoneSelection(node.name, true);
+        }
+      }
+    });
+  }
+  
+  if (clearSelBtn) {
+    clearSelBtn.addEventListener('click', () => {
+      selectedBones.clear();
+      updateBoneTree();
+    });
+  }
+}
+
+// Toggle bone selection (and descendants)
+function toggleBoneSelection(boneName, selected) {
+  if (selected) {
+    selectedBones.add(boneName);
+    // Add all descendants
+    const stack = [boneName];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      const children = boneChildrenMap.get(current) || [];
+      for (const child of children) {
+        if (!selectedBones.has(child)) {
+          selectedBones.add(child);
+          stack.push(child);
+        }
+      }
+    }
+  } else {
+    selectedBones.delete(boneName);
+    // Remove all descendants when deselecting parent
+    const stack = [boneName];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      const children = boneChildrenMap.get(current) || [];
+      for (const child of children) {
+        if (selectedBones.has(child)) {
+          selectedBones.delete(child);
+          stack.push(child);
+        }
+      }
+    }
+  }
+  updateBoneTree();
+}
+
+// Get which bones should be scaled based on selection
+function getBonesToScale() {
+  if (selectedBones.size === 0) {
+    // No selection - scale all bones
+    return null;
+  }
+  return selectedBones;
+}
+
+// Expose for debugging
+window.toggleBoneSelection = toggleBoneSelection;
+window.getBonesToScale = getBonesToScale;
+window.selectedBones = selectedBones;
+window.boneHierarchy = boneHierarchy;
+
+// gh/entry.ts
   var drop = document.getElementById("drop");
   var input = document.getElementById("file");
   var list = document.getElementById("list");
@@ -8400,6 +8660,7 @@
     zipUrl = "";
   }
   function paint() {
+  if (!treeContainer) initTreeUI();
     list.replaceChildren();
     for (const file of files) {
       const row = document.createElement("span");
@@ -8500,6 +8761,7 @@
         times: Number(times.value),
         percent: Number(percent.value),
         mode: scaleMode(),
+        bonesToScale: getBonesToScale(),
         bake: bake.getAttribute("aria-pressed") === "true",
         center: center.getAttribute("aria-pressed") === "true"
       });
