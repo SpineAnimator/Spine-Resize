@@ -67,8 +67,10 @@ go.addEventListener("click", async () => {
     const a = document.createElement("a");
     a.href = url;
     a.download = "resized.zip";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
     line.textContent = result.line;
   } catch (error) {
     line.textContent = error instanceof Error ? error.message : "failed";

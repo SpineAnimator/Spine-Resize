@@ -207,7 +207,11 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
 
   const w = Math.round(box.width);
   const h = Math.round(box.height);
-  const kind = skels.length ? "skel" : jsons.length ? "json" : "spine";
+  const kinds: string[] = [];
+  if (jsons.length) kinds.push("json");
+  if (skels.length) kinds.push("skel");
+  if (spines.length) kinds.push("spine");
+  const kind = kinds.join("+") || "spine";
   const bones = skels[0]?.sk.bones.length ?? jsons[0]?.data.bones.length ?? spineBones;
   const jsonAnims = jsons.reduce((n, job) => n + Object.keys(job.data.animations ?? {}).length, 0);
   const skelAnims = skels.reduce((n, job) => n + (job.sk.animations?.length ?? 0), 0);
