@@ -7458,6 +7458,7 @@
   }
   function scaleCurveAxis(data, base, mark, used, locked) {
     if (base + 20 > data.length) return;
+    if (u32be(data, base + 16) !== 0) return;
     const sent = (i) => u32be(data, base + i * 4) === CURVE_SENTINEL;
     const take = (i) => {
       const o = base + i * 4;
@@ -7471,7 +7472,6 @@
       take(3);
     }
   }
-
   function scaleTranslateTimelines(data, mark, used, locked) {
     let pairs = 0;
     for (const i of findAll(data, TRANSLATE_HDR)) {
@@ -8043,7 +8043,6 @@
       root.x = num(root.x) + offsetX;
       root.y = num(root.y) + offsetY;
     }
-    // Scale attachments using a regular function instead of arrow function with continue
     eachAtt(data, function(_slot, att) {
       if (!scaleAll && !shouldScale.has(_slot)) return;
       if (att.x != null) att.x *= s;

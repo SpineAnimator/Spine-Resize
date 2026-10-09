@@ -23,14 +23,15 @@
       margin: 0 auto;
       padding: 24px 32px;
       display: grid;
-grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 2fr 1fr;
       grid-template-rows: auto auto 1fr auto auto;
       gap: 24px;
       grid-template-areas:
         "header header"
-        "drop tree settings"
+        "settings settings"
+        "drop tree"
         "go go"
-        "line line"
+        "line line";
     }
     @media (max-width: 768px) {
       main {
@@ -172,7 +173,7 @@ grid-template-columns: 1fr 1fr 1fr;
     </div>
     <div id="tree" class="tree-area">
       <div id="tree-placeholder" style="padding:24px 12px; color:#666; font-size:0.9rem;">
-        <div>Tree</div>
+        <div>Выберите скелет</div>
       </div>
     </div>
     <button id="go" type="button" disabled>Resize</button>
