@@ -20,7 +20,7 @@ function paint() {
     list.appendChild(row);
   }
   go.disabled = !files.length || busy;
-  if (!files.length && !busy) line.textContent = "json · skel · spine";
+  if (!files.length && !busy) line.textContent = ".json Import Data · .spine Open";
 }
 
 function add(batch: FileList | File[]) {

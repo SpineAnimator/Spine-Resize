@@ -190,9 +190,11 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
   }
   const shared = opts.center ? centerOffset(box, factor) : { x: 0, y: 0 };
   let spineBones = 0;
+  let spineKeys = 0;
   for (const entry of spines) {
     const scaled = await scaleSpineFile(entry.data, factor, shared.x, shared.y);
     spineBones = Math.max(spineBones, scaled.stats.bones);
+    spineKeys += scaled.stats.animPairs;
     out.push({ path: entry.path, data: scaled.bytes });
   }
   for (const entry of atlases) {
@@ -210,6 +212,10 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
   const animCount =
     jsons.reduce((n, job) => n + Object.keys(job.data.animations ?? {}).length, 0) +
     skels.reduce((n, job) => n + (job.sk.animations?.length ?? 0), 0);
-  const line = `${kind}  ${w}×${h}${approx ? "~" : ""}  ×${factor.toFixed(3)}  ${bones} bones  ${animCount} anim  ${target}`;
+  const animBits: string[] = [];
+  if (jsons.length || skels.length) animBits.push(`${animCount} anim`);
+  if (spines.length) animBits.push(`${spineKeys} translate`);
+  const animText = animBits.join("  ") || "0 anim";
+  const line = `${kind}  ${w}×${h}${approx ? "~" : ""}  ×${factor.toFixed(3)}  ${bones} bones  ${animText}  ${target}`;
   return { entries: out, factor, line };
 }
