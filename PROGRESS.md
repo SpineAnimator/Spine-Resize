@@ -15,3 +15,4 @@
 
 JSON: `animations` не выкидываются. Масштабируются translate / translatex / translatey, deform, softness у IK. Файл только с `animations` (без `bones`) больше не пропускается.
 
+Футер `.spine` режется по магии `02 0b 02 0b`, длина сжатого потока пишется в байты 4..7. Deform `offset` в JSON не масштаб. Пары translate в `.spine` вслепую не трогаются. `.skel` не менялся.
