@@ -16,3 +16,5 @@
 JSON: `animations` не выкидываются. Масштабируются translate / translatex / translatey, deform, softness у IK. Файл только с `animations` (без `bones`) больше не пропускается.
 
 Футер `.spine` режется по магии `02 0b 02 0b`, длина сжатого потока пишется в байты 4..7. Deform `offset` в JSON не масштаб. Пары translate в `.spine` вслепую не трогаются. `.skel` не менялся.
+
+Проверка после правки: `.skel` factor=1 — 0 отличий, 30283 байта. JSON `cherry` и `gunslinger` на месте, 7 IK на месте, deform offset остаётся индексом. `.spine` factor=1 — те же байты. После масштаба Java `Inflater` читает поток до конца и оставляет 20 байт футера.
