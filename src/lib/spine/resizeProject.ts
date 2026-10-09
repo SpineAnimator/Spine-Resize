@@ -207,6 +207,9 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
   const h = Math.round(box.height);
   const kind = skels.length ? "skel" : jsons.length ? "json" : "spine";
   const bones = skels[0]?.sk.bones.length ?? jsons[0]?.data.bones.length ?? spineBones;
-  const line = `${kind}  ${w}×${h}${approx ? "~" : ""}  ×${factor.toFixed(3)}  ${bones} bones  ${target}`;
+  const animCount =
+    jsons.reduce((n, job) => n + Object.keys(job.data.animations ?? {}).length, 0) +
+    skels.reduce((n, job) => n + (job.sk.animations?.length ?? 0), 0);
+  const line = `${kind}  ${w}×${h}${approx ? "~" : ""}  ×${factor.toFixed(3)}  ${bones} bones  ${animCount} anim  ${target}`;
   return { entries: out, factor, line };
 }

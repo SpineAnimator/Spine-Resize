@@ -187,22 +187,10 @@ export function scaleSpineInflated(
     i = end - 1;
   }
 
-  let animPairs = 0;
-  for (let j = 0; j + 15 < data.length; j++) {
-    if (data[j] !== 0x01 || data[j + 1] !== 0x01 || data[j + 14] !== 0x01) continue;
-    const xo = j + 6;
-    const yo = j + 10;
-    if (used.has(xo) || used.has(yo) || locked.has(xo) || locked.has(yo)) continue;
-    const t = getF(data, j + 2);
-    const x = getF(data, xo);
-    const y = getF(data, yo);
-    if (!Number.isFinite(t) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
-    if (Math.abs(t) > 1e5) continue;
-    if (Math.max(Math.abs(x), Math.abs(y)) < 8) continue;
-    mark(xo);
-    mark(yo);
-    animPairs++;
-  }
+  // Translate-пары 01 01 … 01 раньше считались «анимацией» и пропускали ключи
+  // меньше 8px, либо портили соседние float. Кости, регионы и меши уже
+  // масштабируются якорями. Таймлайны здесь не трогаем.
+  const animPairs = 0;
 
   // Root local x/y is world position when the root is unrotated, which matches .skel centering.
   if (root && (offsetX || offsetY)) {
@@ -231,10 +219,33 @@ export function scaleSpineInflated(
   };
 }
 
+const FOOTER_LEN = 20;
 const FOOTER_MAGIC = [0x02, 0x0b, 0x02, 0x0b];
 
-/** Raw deflate, then a 20-byte editor footer. Dropping the footer is "project footer is missing". */
+function footerMagicOk(footer: Uint8Array) {
+  if (footer.length < 4) return false;
+  const at = footer.length - 4;
+  for (let i = 0; i < 4; i++) if (footer[at + i] !== FOOTER_MAGIC[i]) return false;
+  return true;
+}
+
+function packedLengthOf(footer: Uint8Array) {
+  if (footer.length < 8) return 0;
+  return new DataView(footer.buffer, footer.byteOffset, footer.byteLength).getUint32(4, false);
+}
+
+/** Raw deflate, then a 20-byte editor footer. Dropping it is "project footer is missing". */
 export function splitSpine(raw: Uint8Array): { inflated: Uint8Array; footer: Uint8Array } {
+  if (raw.length >= FOOTER_LEN && footerMagicOk(raw.slice(raw.length - FOOTER_LEN))) {
+    const footer = raw.slice(raw.length - FOOTER_LEN);
+    const declared = packedLengthOf(footer);
+    const payloadEnd = declared > 0 && declared + FOOTER_LEN <= raw.length ? declared : raw.length - FOOTER_LEN;
+    try {
+      return { inflated: pakoInflateRaw(raw.slice(0, payloadEnd)), footer };
+    } catch {
+      /* fall through to a full inflate */
+    }
+  }
   const inflator = new Inflate({ raw: true });
   inflator.push(raw, true);
   const inflated = inflator.result;
@@ -247,11 +258,9 @@ export function splitSpine(raw: Uint8Array): { inflated: Uint8Array; footer: Uin
 }
 
 function patchFooter(footer: Uint8Array, packedLen: number): Uint8Array {
-  if (footer.length < 20) return footer;
-  const at = footer.length - 4;
-  for (let i = 0; i < 4; i++) if (footer[at + i] !== FOOTER_MAGIC[i]) return footer;
-  const out = footer.slice();
-  new DataView(out.buffer, out.byteOffset, out.byteLength).setUint32(4, packedLen, false);
+  const out = footer.length >= FOOTER_LEN && footerMagicOk(footer) ? footer.slice() : new Uint8Array(FOOTER_LEN);
+  if (!footerMagicOk(out)) out.set(FOOTER_MAGIC, FOOTER_LEN - 4);
+  new DataView(out.buffer, out.byteOffset, out.byteLength).setUint32(4, packedLen >>> 0, false);
   return out;
 }
 

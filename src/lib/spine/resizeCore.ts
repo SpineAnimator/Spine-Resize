@@ -353,7 +353,7 @@ function scaleDeformTree(node: unknown, s: number) {
       if (!key || typeof key !== "object") continue;
       const rec = key as Key;
       if (Array.isArray(rec.vertices)) for (let i = 0; i < rec.vertices.length; i++) rec.vertices[i] *= s;
-      if (typeof rec.offset === "number") rec.offset *= s;
+      // offset — индекс первой вершины, не координата. Масштаб сдвигает ключ и Spine его пропускает.
     }
     return;
   }
@@ -485,7 +485,8 @@ export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY 
       if (typeof sk[key] === "number") sk[key] = (sk[key] as number) * s;
     }
   }
-  if (animNames.length && Object.keys(data.animations ?? {}).length !== animNames.length) {
+  const now = data.animations ?? {};
+  if (animNames.length && animNames.some((name) => !now[name] || typeof now[name] !== "object")) {
     throw new Error("animations were dropped");
   }
 }

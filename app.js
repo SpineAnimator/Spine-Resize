@@ -8291,22 +8291,7 @@
       }
       i = end - 1;
     }
-    let animPairs = 0;
-    for (let j = 0; j + 15 < data.length; j++) {
-      if (data[j] !== 1 || data[j + 1] !== 1 || data[j + 14] !== 1) continue;
-      const xo = j + 6;
-      const yo = j + 10;
-      if (used.has(xo) || used.has(yo) || locked.has(xo) || locked.has(yo)) continue;
-      const t = getF(data, j + 2);
-      const x = getF(data, xo);
-      const y = getF(data, yo);
-      if (!Number.isFinite(t) || !Number.isFinite(x) || !Number.isFinite(y)) continue;
-      if (Math.abs(t) > 1e5) continue;
-      if (Math.max(Math.abs(x), Math.abs(y)) < 8) continue;
-      mark(xo);
-      mark(yo);
-      animPairs++;
-    }
+    const animPairs = 0;
     if (root && (offsetX || offsetY)) {
       if (offsetX) setF(data, root.x, getF(data, root.x) + offsetX);
       if (offsetY) setF(data, root.y, getF(data, root.y) + offsetY);
@@ -8332,8 +8317,28 @@
       }
     };
   }
+  var FOOTER_LEN = 20;
   var FOOTER_MAGIC = [2, 11, 2, 11];
+  function footerMagicOk(footer) {
+    if (footer.length < 4) return false;
+    const at = footer.length - 4;
+    for (let i = 0; i < 4; i++) if (footer[at + i] !== FOOTER_MAGIC[i]) return false;
+    return true;
+  }
+  function packedLengthOf(footer) {
+    if (footer.length < 8) return 0;
+    return new DataView(footer.buffer, footer.byteOffset, footer.byteLength).getUint32(4, false);
+  }
   function splitSpine(raw) {
+    if (raw.length >= FOOTER_LEN && footerMagicOk(raw.slice(raw.length - FOOTER_LEN))) {
+      const footer = raw.slice(raw.length - FOOTER_LEN);
+      const declared = packedLengthOf(footer);
+      const payloadEnd = declared > 0 && declared + FOOTER_LEN <= raw.length ? declared : raw.length - FOOTER_LEN;
+      try {
+        return { inflated: inflateRaw_1(raw.slice(0, payloadEnd)), footer };
+      } catch {
+      }
+    }
     const inflator = new Inflate_1({ raw: true });
     inflator.push(raw, true);
     const inflated = inflator.result;
@@ -8345,11 +8350,9 @@
     return { inflated, footer };
   }
   function patchFooter(footer, packedLen) {
-    if (footer.length < 20) return footer;
-    const at = footer.length - 4;
-    for (let i = 0; i < 4; i++) if (footer[at + i] !== FOOTER_MAGIC[i]) return footer;
-    const out = footer.slice();
-    new DataView(out.buffer, out.byteOffset, out.byteLength).setUint32(4, packedLen, false);
+    const out = footer.length >= FOOTER_LEN && footerMagicOk(footer) ? footer.slice() : new Uint8Array(FOOTER_LEN);
+    if (!footerMagicOk(out)) out.set(FOOTER_MAGIC, FOOTER_LEN - 4);
+    new DataView(out.buffer, out.byteOffset, out.byteLength).setUint32(4, packedLen >>> 0, false);
     return out;
   }
   async function inflateRaw2(raw) {
@@ -8628,7 +8631,6 @@
         if (!key || typeof key !== "object") continue;
         const rec = key;
         if (Array.isArray(rec.vertices)) for (let i = 0; i < rec.vertices.length; i++) rec.vertices[i] *= s;
-        if (typeof rec.offset === "number") rec.offset *= s;
       }
       return;
     }
@@ -8758,7 +8760,8 @@
         if (typeof sk[key] === "number") sk[key] = sk[key] * s;
       }
     }
-    if (animNames.length && Object.keys(data.animations ?? {}).length !== animNames.length) {
+    const now = data.animations ?? {};
+    if (animNames.length && animNames.some((name) => !now[name] || typeof now[name] !== "object")) {
       throw new Error("animations were dropped");
     }
   }
@@ -8945,7 +8948,8 @@
     const h = Math.round(box.height);
     const kind = skels.length ? "skel" : jsons.length ? "json" : "spine";
     const bones = skels[0]?.sk.bones.length ?? jsons[0]?.data.bones.length ?? spineBones;
-    const line2 = `${kind}  ${w}\xD7${h}${approx ? "~" : ""}  \xD7${factor.toFixed(3)}  ${bones} bones  ${target}`;
+    const animCount = jsons.reduce((n, job) => n + Object.keys(job.data.animations ?? {}).length, 0) + skels.reduce((n, job) => n + (job.sk.animations?.length ?? 0), 0);
+    const line2 = `${kind}  ${w}\xD7${h}${approx ? "~" : ""}  \xD7${factor.toFixed(3)}  ${bones} bones  ${animCount} anim  ${target}`;
     return { entries: out, factor, line: line2 };
   }
 
