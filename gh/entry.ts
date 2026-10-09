@@ -52,15 +52,35 @@ function add(batch: FileList | File[]) {
   paint();
 }
 
-drop.addEventListener("click", () => input.click());
+let dragDepth = 0;
+let ignoreClick = false;
+
+drop.addEventListener("click", () => {
+  // A drop on this button is followed by a click, which would open the picker.
+  if (ignoreClick) return;
+  input.click();
+});
+drop.addEventListener("dragenter", (event) => {
+  event.preventDefault();
+  dragDepth++;
+  drop.classList.add("hot");
+});
 drop.addEventListener("dragover", (event) => {
   event.preventDefault();
   drop.classList.add("hot");
 });
-drop.addEventListener("dragleave", () => drop.classList.remove("hot"));
+drop.addEventListener("dragleave", () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) drop.classList.remove("hot");
+});
 drop.addEventListener("drop", (event) => {
   event.preventDefault();
+  dragDepth = 0;
   drop.classList.remove("hot");
+  ignoreClick = true;
+  setTimeout(() => {
+    ignoreClick = false;
+  }, 400);
   if (event.dataTransfer?.files?.length) add(event.dataTransfer.files);
 });
 input.addEventListener("change", () => {

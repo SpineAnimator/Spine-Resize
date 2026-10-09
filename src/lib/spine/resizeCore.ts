@@ -224,8 +224,18 @@ export function bakeJsonScales(data: SpineJson) {
             if (k.y != null) k.y *= sy;
             scaleCurve(k.curve, sx, sy);
           }
-          for (const k of tl.translatex ?? []) if (k.x != null) k.x *= sx;
-          for (const k of tl.translatey ?? []) if (k.y != null) k.y *= sy;
+          // Separate-axis keys store the distance in `value`, not x/y.
+          // A 4-float curve is one axis: scale that axis, not the other.
+          for (const k of tl.translatex ?? []) {
+            if (k.x != null) k.x *= sx;
+            else if (k.value != null) k.value *= sx;
+            scaleCurve(k.curve, sx, sx);
+          }
+          for (const k of tl.translatey ?? []) {
+            if (k.y != null) k.y *= sy;
+            else if (k.value != null) k.value *= sy;
+            scaleCurve(k.curve, sy, sy);
+          }
         }
       }
     }
