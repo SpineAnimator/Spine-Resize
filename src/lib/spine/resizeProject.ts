@@ -209,11 +209,15 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
   const h = Math.round(box.height);
   const kind = skels.length ? "skel" : jsons.length ? "json" : "spine";
   const bones = skels[0]?.sk.bones.length ?? jsons[0]?.data.bones.length ?? spineBones;
-  const animCount =
-    jsons.reduce((n, job) => n + Object.keys(job.data.animations ?? {}).length, 0) +
-    skels.reduce((n, job) => n + (job.sk.animations?.length ?? 0), 0);
+  const jsonAnims = jsons.reduce((n, job) => n + Object.keys(job.data.animations ?? {}).length, 0);
+  const skelAnims = skels.reduce((n, job) => n + (job.sk.animations?.length ?? 0), 0);
   const animBits: string[] = [];
-  if (jsons.length || skels.length) animBits.push(`${animCount} anim`);
+  if (jsons.length && !skels.length) animBits.push(`${jsonAnims} anim`);
+  else if (skels.length && !jsons.length) animBits.push(`${skelAnims} anim`);
+  else {
+    if (jsons.length) animBits.push(`${jsonAnims} json`);
+    if (skels.length) animBits.push(`${skelAnims} skel`);
+  }
   if (spines.length) animBits.push(`${spineKeys} translate`);
   const animText = animBits.join("  ") || "0 anim";
   const line = `${kind}  ${w}×${h}${approx ? "~" : ""}  ×${factor.toFixed(3)}  ${bones} bones  ${animText}  ${target}`;
