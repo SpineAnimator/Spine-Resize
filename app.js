@@ -35,9 +35,9 @@
     mod
   ));
 
-  // ../spine-deps/node_modules/jszip/dist/jszip.min.js
+  // ../../mods/node_modules/jszip/dist/jszip.min.js
   var require_jszip_min = __commonJS({
-    "../spine-deps/node_modules/jszip/dist/jszip.min.js"(exports, module) {
+    "../../mods/node_modules/jszip/dist/jszip.min.js"(exports, module) {
       !(function(e) {
         if ("object" == typeof exports && "undefined" != typeof module) module.exports = e();
         else if ("function" == typeof define && define.amd) define([], e);
@@ -3932,7 +3932,7 @@
     return finishAabb(box);
   }
 
-  // ../spine-deps/node_modules/pako/dist/pako.mjs
+  // ../../mods/node_modules/pako/dist/pako.mjs
   var Z_FIXED = 4;
   var Z_BINARY = 0;
   var Z_TEXT = 1;
@@ -8072,7 +8072,10 @@
       scaleDeformTree(anim.deform, s);
       for (const keys of Object.values(anim.ik ?? {})) {
         if (!Array.isArray(keys)) continue;
-        for (const k of keys) if (typeof k.softness === "number") k.softness *= s;
+        for (const k of keys) {
+          if (typeof k.softness === "number") k.softness *= s;
+          scaleCurve(k.curve, 1, s);
+        }
       }
       const pathMode = /* @__PURE__ */ new Map();
       const rememberPath = (c) => {
@@ -8090,10 +8093,16 @@
         if (!constraint || typeof constraint !== "object" || Array.isArray(constraint)) continue;
         const mode = pathMode.get(name);
         if (mode?.position === "fixed") {
-          for (const k of constraint.position ?? []) if (typeof k.value === "number") k.value *= s;
+          for (const k of constraint.position ?? []) {
+            if (typeof k.value === "number") k.value *= s;
+            scaleCurve(k.curve, s, s);
+          }
         }
         if (mode?.spacing === "length" || mode?.spacing === "fixed") {
-          for (const k of constraint.spacing ?? []) if (typeof k.value === "number") k.value *= s;
+          for (const k of constraint.spacing ?? []) {
+            if (typeof k.value === "number") k.value *= s;
+            scaleCurve(k.curve, s, s);
+          }
         }
       }
       for (const constraint of Object.values(anim.physics ?? {})) {
@@ -8101,7 +8110,10 @@
         for (const name of ["wind", "gravity"]) {
           const keys = constraint[name];
           if (!Array.isArray(keys)) continue;
-          for (const k of keys) if (typeof k.value === "number") k.value *= s;
+          for (const k of keys) {
+            if (typeof k.value === "number") k.value *= s;
+            scaleCurve(k.curve, s, s);
+          }
         }
       }
     }
@@ -8443,6 +8455,16 @@
       ignoreClick = false;
     }, 400);
     if (event.dataTransfer?.files?.length) add(event.dataTransfer.files);
+  });
+  window.addEventListener("dragover", (event) => {
+    event.preventDefault();
+  });
+  window.addEventListener("drop", (event) => {
+    event.preventDefault();
+    dragDepth = 0;
+    drop.classList.remove("hot");
+    const dropped = event.dataTransfer?.files;
+    if (dropped?.length) add(dropped);
   });
   input.addEventListener("change", () => {
     if (input.files?.length) add(input.files);

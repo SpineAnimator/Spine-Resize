@@ -502,7 +502,11 @@ export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY 
     scaleDeformTree(anim.deform, s);
     for (const keys of Object.values(anim.ik ?? {})) {
       if (!Array.isArray(keys)) continue;
-      for (const k of keys) if (typeof k.softness === "number") k.softness *= s;
+      for (const k of keys) {
+        if (typeof k.softness === "number") k.softness *= s;
+        // Channel 0 is mix (not a distance). Channel 1 is softness.
+        scaleCurve(k.curve, 1, s);
+      }
     }
     const pathMode = new Map<string, { position: string; spacing: string }>();
     const rememberPath = (c: Record<string, unknown>) => {
@@ -520,10 +524,16 @@ export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY 
       if (!constraint || typeof constraint !== "object" || Array.isArray(constraint)) continue;
       const mode = pathMode.get(name);
       if (mode?.position === "fixed") {
-        for (const k of constraint.position ?? []) if (typeof k.value === "number") k.value *= s;
+        for (const k of constraint.position ?? []) {
+          if (typeof k.value === "number") k.value *= s;
+          scaleCurve(k.curve, s, s);
+        }
       }
       if (mode?.spacing === "length" || mode?.spacing === "fixed") {
-        for (const k of constraint.spacing ?? []) if (typeof k.value === "number") k.value *= s;
+        for (const k of constraint.spacing ?? []) {
+          if (typeof k.value === "number") k.value *= s;
+          scaleCurve(k.curve, s, s);
+        }
       }
     }
     for (const constraint of Object.values(anim.physics ?? {})) {
@@ -532,7 +542,10 @@ export function scaleJson(data: SpineJson, factor: number, offsetX = 0, offsetY 
       for (const name of ["wind", "gravity"] as const) {
         const keys = constraint[name];
         if (!Array.isArray(keys)) continue;
-        for (const k of keys) if (typeof k.value === "number") k.value *= s;
+        for (const k of keys) {
+          if (typeof k.value === "number") k.value *= s;
+          scaleCurve(k.curve, s, s);
+        }
       }
     }
   }

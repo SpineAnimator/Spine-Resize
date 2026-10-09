@@ -77,11 +77,23 @@ drop.addEventListener("drop", (event) => {
   event.preventDefault();
   dragDepth = 0;
   drop.classList.remove("hot");
+  // A drop on this button is followed by a click, which would open the picker.
   ignoreClick = true;
   setTimeout(() => {
     ignoreClick = false;
   }, 400);
   if (event.dataTransfer?.files?.length) add(event.dataTransfer.files);
+});
+window.addEventListener("dragover", (event) => {
+  // Without this the browser opens the dropped file and leaves the page.
+  event.preventDefault();
+});
+window.addEventListener("drop", (event) => {
+  event.preventDefault();
+  dragDepth = 0;
+  drop.classList.remove("hot");
+  const dropped = event.dataTransfer?.files;
+  if (dropped?.length) add(dropped);
 });
 input.addEventListener("change", () => {
   if (input.files?.length) add(input.files);
