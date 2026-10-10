@@ -8732,25 +8732,33 @@ window.boneHierarchy = boneHierarchy;
   }
 
   async function bridgeFallbackAuto() {
-    // Zero-read protocol: ask the user to pick the project folder ONCE.
-    // Then we scan it automatically for .spine/.skel/.json and all images.
-    if (!('showDirectoryPicker' in window)) {
+    // Pick the files currently open in Spine editor via File System Access API.
+    if (!('showOpenFilePicker' in window)) {
       bridgeFallbackPicker();
       return;
     }
     try {
-      const dirHandle = await window.showDirectoryPicker();
+      const handles = await window.showOpenFilePicker({
+        types: [{
+          description: 'Spine files',
+          accept: {
+            'application/json': ['.json'],
+            'application/octet-stream': ['.skel', '.bytes', '.spine'],
+            'image/png': ['.png'],
+            'image/jpeg': ['.jpg', '.jpeg'],
+            'image/webp': ['.webp'],
+            'text/plain': ['.atlas']
+          }
+        }],
+        multiple: true,
+        excludeAcceptAllOption: false
+      });
       const outFiles = [];
-      async function scan(handle, prefix) {
-        for await (const [name, entry] of handle.entries()) {
-          if (entry.kind === 'directory') { await scan(entry, prefix + name + '/'); continue; }
-          const ext = (name.split('.').pop() || '').toLowerCase();
-          if (!['json','skel','spine','bytes','atlas','png','jpg','jpeg','webp'].includes(ext)) continue;
-          const f = await entry.getFile();
-          outFiles.push(f);
-        }
+      for (const handle of handles) {
+        const file = await handle.getFile();
+        file.fileHandle = handle;
+        outFiles.push(file);
       }
-      await scan(dirHandle, '');
       if (outFiles.length) {
         add(outFiles);
         go.disabled = false;
