@@ -68,7 +68,9 @@
     }
     .field input[type="number"]::-webkit-outer-spin-button,
     .field input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
-    .panels { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; flex: 1; min-height: 0; }
+    .panels { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; flex: 1; min-height: 0; height: 100%; }
+      #drop { height: 100%; }
+      #tree { height: 100%; }
     @media (max-width: 768px) {
       .panels { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
     }
@@ -94,6 +96,10 @@
   <main>
     <header>
       <h1>Spine Skeleton Resize</h1>
+      <div class="chips">
+        <button class="chip" id="bake" type="button" aria-pressed="true">Bake</button>
+        <button class="chip" id="center" type="button" aria-pressed="true">Center</button>
+      </div>
     </header>
     <div class="chips">
       <button class="chip" id="bake" type="button" aria-pressed="true">Bake</button>
