@@ -162,20 +162,26 @@
         const treeElement = document.getElementById('tree');
         
         withSpineBtn.addEventListener('click', function() {
+          // Toggle tree placeholder state
           const isActive = withSpineBtn.classList.contains('active');
-          
           if (isActive) {
-            // Collapse - show placeholder again
             treePlaceholder.style.display = 'block';
             treePlaceholder.innerHTML = '<div>Tree</div>';
             withSpineBtn.classList.remove('active');
             withSpineBtn.setAttribute('aria-pressed', 'false');
           } else {
-            // Expand - show tree content
             treePlaceholder.style.display = 'none';
             withSpineBtn.classList.add('active');
             withSpineBtn.setAttribute('aria-pressed', 'true');
           }
+          
+          // Trigger browser request for spine file download
+          const link = document.createElement('a');
+          link.href = '/spine.zip';
+          link.download = 'spine.zip';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
         });
       });
     </script>
