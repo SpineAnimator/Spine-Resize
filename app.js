@@ -8681,13 +8681,25 @@ window.boneHierarchy = boneHierarchy;
   });
   window.addEventListener("dragover", (event) => {
     event.preventDefault();
+    dragDepth++;
+    drop.classList.add("hot");
+  });
+  window.addEventListener("dragleave", (event) => {
+    event.preventDefault();
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) drop.classList.remove("hot");
   });
   window.addEventListener("drop", (event) => {
     event.preventDefault();
     dragDepth = 0;
-    drop.classList.remove("hot");
+    drop.classList.add("hot");
     const dropped = event.dataTransfer?.files;
-    if (dropped?.length) add(dropped);
+    if (dropped?.length) {
+      add(dropped);
+      drop.classList.remove("hot");
+    } else {
+      drop.classList.remove("hot");
+    }
   });
   input.addEventListener("change", () => {
     if (input.files?.length) add(input.files);
