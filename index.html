@@ -135,15 +135,47 @@
       </div>
       <div id="tree">
         <div id="tree-placeholder" style="padding:24px 12px; color:#666; font-size:0.9rem;">
-          <div>Выберите скелет</div>
+          <div>Tree</div>
         </div>
       </div>
     </div>
     <div class="actions">
       <button id="go" class="btn primary" type="button" disabled>Resize</button>
-      <button class="chip" id="with_spine" type="button" aria-pressed="true">with Spine</button>
+      <button class="chip" id="with_spine" type="button" aria-pressed="false">with Spine</button>
+    <style>
+      #with_spine.active {
+        background: #f2f2f2;
+        color: #000;
+        border-color: #f2f2f2;
+      }
+    </style>
+    <script>
+      document.addEventListener('DOMContentLoaded', function() {
+        const withSpineBtn = document.getElementById('with_spine');
+        const treePlaceholder = document.getElementById('tree-placeholder');
+        const treeElement = document.getElementById('tree');
+        
+        withSpineBtn.addEventListener('click', function() {
+          const isActive = withSpineBtn.classList.contains('active');
+          
+          if (isActive) {
+            // Collapse - show placeholder again
+            treePlaceholder.style.display = 'block';
+            treePlaceholder.innerHTML = '<div>Выберите скелет</div>';
+            withSpineBtn.classList.remove('active');
+            withSpineBtn.setAttribute('aria-pressed', 'false');
+          } else {
+            // Expand - show tree content
+            treePlaceholder.style.display = 'none';
+            withSpineBtn.classList.add('active');
+            withSpineBtn.setAttribute('aria-pressed', 'true');
+            // You can add logic here to load tree data from the server
+          }
+        });
+      });
+    </script>
     </div>
-    <p class="line">.json Import Data · .spine Open</p>
+    
   </main>
   <input id="file" type="file" multiple hidden accept=".zip,.json,.skel,.bytes,.spine,.atlas,.txt,.png,.jpg,.jpeg,.webp" />
   <script src="app.js"></script>
