@@ -133,13 +133,13 @@
       opacity: 0.3;
       cursor: default;
     }
-    /* with Spine button - wider, with "with SPINE" text right-aligned, 6px padding */
+    /* with Spine button - using SPINE texture from image */
     .with_spine {
       flex: 0 0 auto;
-      width: 160px;
+      width: 180px;
       height: 44px;
-      border: 1px solid #8a1c1c;
-      background: #8a1c1c;
+      border: none;
+      background: url('spine-button-texture.png') center / cover no-repeat;
       color: #f2f2f2;
       font-weight: 600;
       font-size: 0.95rem;
@@ -148,15 +148,24 @@
       justify-content: flex-end;
       padding-right: 6px;
       gap: 4px;
+      position: relative;
     }
     .with_spine::before {
       content: "with ";
       font-weight: 400;
-      opacity: 0.8;
+      opacity: 0.9;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
     }
     .with_spine span {
       font-weight: 700;
       letter-spacing: 0.05em;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+    .with_spine:hover {
+      filter: brightness(1.1);
+    }
+    .with_spine:active {
+      filter: brightness(0.95);
     }
     .line { margin: 0; font-size: 0.875rem; color: #8a8a8a; }
     #status { grid-area: status; width: 100%; font-size: 0.875rem; color: #f2f2f2; white-space: normal; overflow: visible; }
