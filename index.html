@@ -182,13 +182,39 @@
             withSpineBtn.setAttribute('aria-pressed', 'true');
           }
           
-          // Trigger browser request for spine file download
-          const link = document.createElement('a');
-          link.href = '/spine.zip';
-          link.download = 'spine.zip';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+          // Open system file dialog so user can select the file from their Spine editor
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = '.json,.skel,.spine,.atlas,.png,.jpg,.jpeg,.webp,.zip';
+          input.onchange = function(e) {
+            const file = e.target.files[0];
+            if (file) {
+              // User selected a file - process it
+              const reader = new FileReader();
+              reader.onload = function(event) {
+                const content = event.target.result;
+                // Process the spine file content here
+                console.log('Selected file:', file.name);
+                console.log('File size:', file.size);
+                
+                // Trigger the resize logic with the loaded file
+                if (window.processSpineFile) {
+                  window.processSpineFile(content, file);
+                } else {
+                  alert('Файл ' + file.name + ' выбран. Размер: ' + file.size + ' байт.
+Обработайте файл дальше в редакторе.');
+                }
+              };
+              // Detect file type and read accordingly
+              if (file.name.endsWith('.spine') || file.name.endsWith('.skel') || file.name.endsWith('.bytes')) {
+                reader.readAsArrayBuffer(file);
+              } else {
+                reader.readAsText(file);
+              }
+            }
+          };
+          // Open the file picker dialog (system-level file selection)
+          input.click();
         });
       });
     </script>
