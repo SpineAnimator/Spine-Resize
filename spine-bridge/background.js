@@ -34,7 +34,7 @@ async function callNative(method, params) {
   port.postMessage({ id, method, params });
   return Promise.race([
     p,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("native timeout")), 5000))
+    new Promise((_, reject) => setTimeout(() => reject(new Error("native timeout")), 8000))
   ]);
 }
 
@@ -57,6 +57,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           break;
         case "SAVE_FILE":
           result = await callNative("save_file", { path: msg.path, bytes: Array.from(msg.bytes) });
+          break;
+        case "PING":
+          result = await callNative("get_open_file_path", {});
           break;
         default:
           throw new Error("unknown method " + msg.type);

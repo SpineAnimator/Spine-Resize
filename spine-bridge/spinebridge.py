@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
 """Native messaging host for Spine Resize Bridge.
 
-Talks to the Chrome extension. Finds the Spine project currently open in the
-Spine editor, reads it plus referenced images, and can write the resized file
-back over the original.
+Fully automatic: no config file needed. When the website asks for the open
+Spine project, this host:
 
-Configuration: a JSON file at ~/.spine-bridge/config.json with key "project"
-holding the path to the currently open .spine/.json/.skel project. Update it
-manually (or via the Spine menu) whenever you open a project in Spine.
+  1. Tries to ask the running Spine editor (via AppleScript on macOS) for the
+     path of its front document.
+  2. Falls back to scanning standard folders (Documents, Desktop, Downloads,
+     recent folders) for the most recently modified .spine / .skel / .json
+     project file.
+  3. Returns the file bytes plus all sibling images in the same directory.
 
-On macOS it also tries AppleScript to ask Spine for its front document path.
+It can also write the resized bytes back over the original file.
 """
-import json, os, sys, subprocess, struct, glob
+import json, os, sys, subprocess, struct, time, glob
 
-CONFIG_DIR = os.path.expanduser("~/.spine-bridge")
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
+SEARCH_DIRS = [
+    os.path.expanduser("~/Documents"),
+    os.path.expanduser("~/Desktop"),
+    os.path.expanduser("~/Downloads"),
+    os.path.expanduser("~"),
+]
+
+PROJECT_EXTS = (".spine", ".skel", ".bytes", ".json")
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
 
 
 def read_json(fd):
@@ -36,23 +45,18 @@ def write_msg(obj):
     sys.stdout.buffer.flush()
 
 
-def load_config():
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def save_config(cfg):
-    os.makedirs(CONFIG_DIR, exist_ok=True)
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, ensure_ascii=False, indent=2)
-
-
-def applescript_find_spine():
-    """Ask Spine (macOS) for the path of its frontmost document."""
-    script = 'tell application "Spine" to get name of front document'
+def applescript_front_document_path():
+    """Ask Spine (macOS) for the path of its front document. Returns path or None."""
+    script = (
+        'tell application "Spine"\n'
+        '  if (count of documents) > 0 then\n'
+        '    set d to front document\n'
+        '    try\n'
+        '      return path of d\n'
+        '    end try\n'
+        '  end if\n'
+        'end tell'
+    )
     try:
         out = subprocess.run(
             ["osascript", "-e", script],
@@ -65,23 +69,59 @@ def applescript_find_spine():
     return None
 
 
-def get_open_file_path():
-    cfg = load_config()
-    p = cfg.get("project")
-    if p and os.path.exists(p):
-        return p
-    ascript = applescript_find_spine()
-    if ascript:
-        candidates = [
-            os.path.expanduser("~/Documents/" + ascript),
-            os.path.expanduser("~/Documents/Spine/" + ascript),
-            ascript,
-        ]
-        for c in candidates:
-            if os.path.exists(c):
-                save_config({"project": c})
-                return c
+def is_spine_running():
+    try:
+        out = subprocess.run(
+            ["pgrep", "-x", "Spine"],
+            capture_output=True, text=True, timeout=3
+        )
+        return out.returncode == 0 and bool(out.stdout.strip())
+    except Exception:
+        return False
+
+
+def find_recent_project(max_age_seconds=600):
+    """Find the most recently modified project file in standard folders."""
+    best = None
+    best_mtime = 0
+    seen_dirs = set()
+    for d in SEARCH_DIRS:
+        if not os.path.isdir(d):
+            continue
+        seen_dirs.add(os.path.realpath(d))
+        # Walk one level deep for common project folders
+        for root, dirs, files in os.walk(d):
+            # Limit depth
+            depth = root[len(d):].count(os.sep)
+            if depth > 2:
+                dirs[:] = []
+                continue
+            for name in files:
+                ext = os.path.splitext(name)[1].lower()
+                if ext not in PROJECT_EXTS:
+                    continue
+                full = os.path.join(root, name)
+                try:
+                    st = os.stat(full)
+                except Exception:
+                    continue
+                if st.st_mtime > best_mtime:
+                    best_mtime = st.st_mtime
+                    best = full
+            # prune common noise dirs
+            dirs[:] = [x for x in dirs if not x.startswith(".") and x not in ("node_modules",)]
+    if best and (time.time() - best_mtime) < max_age_seconds:
+        return best
     return None
+
+
+def get_open_file_path():
+    # 1. Ask Spine directly
+    path = applescript_front_document_path()
+    if path and os.path.exists(path):
+        return path
+    # 2. Fallback: recent project file
+    return find_recent_project()
 
 
 def sibling_dir(project_path):
@@ -98,7 +138,7 @@ def get_sibling_images(project_path):
         if not os.path.isfile(full):
             continue
         ext = os.path.splitext(name)[1].lower()
-        if ext in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+        if ext in IMAGE_EXTS:
             out.append({"path": full, "name": name})
     return out
 

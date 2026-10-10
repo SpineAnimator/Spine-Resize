@@ -8731,70 +8731,61 @@ window.boneHierarchy = boneHierarchy;
     }
   }
 
-  function bridgeFallbackPicker() {
-    // Use File System Access API to pick files open in Spine
-    if (!('showOpenFilePicker' in window)) {
-      alert('File System Access API not supported in this browser.\nPlease use Chrome or Edge to pick files open in Spine.');
+  async function bridgeFallbackAuto() {
+    // Zero-read protocol: ask the user to pick the project folder ONCE.
+    // Then we scan it automatically for .spine/.skel/.json and all images.
+    if (!('showDirectoryPicker' in window)) {
+      bridgeFallbackPicker();
       return;
     }
-    
-    window.showOpenFilePicker({
-      types: [{
-        description: 'Spine files',
-        accept: {
-          'application/json': ['.json'],
-          'application/octet-stream': ['.skel', '.bytes', '.spine'],
-          'image/png': ['.png'],
-          'image/jpeg': ['.jpg', '.jpeg'],
-          'image/webp': ['.webp'],
-          'text/plain': ['.atlas']
+    try {
+      const dirHandle = await window.showDirectoryPicker();
+      const outFiles = [];
+      async function scan(handle, prefix) {
+        for await (const [name, entry] of handle.entries()) {
+          if (entry.kind === 'directory') { await scan(entry, prefix + name + '/'); continue; }
+          const ext = (name.split('.').pop() || '').toLowerCase();
+          if (!['json','skel','spine','bytes','atlas','png','jpg','jpeg','webp'].includes(ext)) continue;
+          const f = await entry.getFile();
+          outFiles.push(f);
         }
-      }],
-      multiple: true,
-      excludeAcceptAllOption: false
-    }).then(handles => {
-      const files = [];
-      for (const handle of handles) {
-        handle.getFile().then(file => {
-          file.fileHandle = handle;
-          files.push(file);
-          if (files.length === handles.length) {
-            add(files);
-            go.disabled = false;
-            go.classList.remove('btn');
-            go.classList.add('btn', 'white');
-            const ws = document.getElementById('with_spine');
-            if (ws) ws.remove();
-          }
-        });
       }
-    }).catch(err => {
-      if (err.name !== 'AbortError') {
-        console.warn('File System Access API error:', err);
-        // Last resort: regular file input
-        const finput = document.createElement('input');
-        finput.type = 'file';
-        finput.multiple = true;
-        finput.accept = '.json,.skel,.spine,.bytes,.atlas,.png,.jpg,.jpeg,.webp';
-        finput.onchange = function(e) {
-          const newFiles = Array.from(e.target.files);
-          add(newFiles);
-          go.disabled = false;
-          go.classList.remove('btn');
-          go.classList.add('btn', 'white');
-          const ws = document.getElementById('with_spine');
-          if (ws) ws.remove();
-        };
-        finput.click();
+      await scan(dirHandle, '');
+      if (outFiles.length) {
+        add(outFiles);
+        go.disabled = false;
+        go.classList.remove('btn');
+        go.classList.add('btn', 'white');
+        const ws = document.getElementById('with_spine');
+        if (ws) ws.remove();
       }
-    });
+    } catch (err) {
+      if (err.name !== 'AbortError') bridgeFallbackPicker();
+    }
+  }
+
+  function bridgeFallbackPicker() {
+    const finput = document.createElement('input');
+    finput.type = 'file';
+    finput.multiple = true;
+    finput.accept = '.json,.skel,.spine,.bytes,.atlas,.png,.jpg,.jpeg,.webp';
+    finput.onchange = function(e) {
+      const newFiles = Array.from(e.target.files);
+      add(newFiles);
+      go.disabled = false;
+      go.classList.remove('btn');
+      go.classList.add('btn', 'white');
+      const ws = document.getElementById('with_spine');
+      if (ws) ws.remove();
+    };
+    finput.click();
   }
 
   const withSpineBtn = document.getElementById('with_spine');
   if (withSpineBtn) {
     withSpineBtn.addEventListener('click', async function() {
       const ok = await bridgeLoad();
-      if (!ok) bridgeFallbackPicker();
+      if (!ok) await bridgeFallbackAuto();
     });
   }
 
