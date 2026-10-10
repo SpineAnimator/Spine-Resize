@@ -4,15 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Spine Skeleton Resize</title>
-  <meta name="theme-color" content="#000000" />
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Crect x='7' y='7' width='18' height='18' fill='none' stroke='%23f2f2f2' stroke-width='2'/%3E%3C/svg%3E" />
+  <meta name="theme-color" content="#8a1c1c" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%238a1c1c'/%3E%3Crect x='7' y='7' width='18' height='18' fill='none' stroke='%23f2f2f2' stroke-width='2'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
-    html, body { margin: 0; height: 100%; background: #000; color: #f2f2f2; }
+    html, body { margin: 0; height: 100%; background: #8a1c1c; color: #f2f2f2; }
     body {
       font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
       overflow: hidden;
@@ -50,8 +50,8 @@
     button, label { font: inherit; }
     button { cursor: pointer; }
     .chips { display: flex; gap: 8px; }
-    .chip { height: 44px; padding: 0 12px; border: 1px solid #2a2a2a; background: #000; color: #8a8a8a; }
-    .chip[aria-pressed="true"] { background: #f2f2f2; color: #000; border-color: #f2f2f2; }
+    .chip { height: 44px; padding: 0 12px; border: 1px solid #2a2a2a; background: #6b1316; color: #8a8a8a; }
+    .chip[aria-pressed="true"] { background: #e8e8e8; color: #000; border-color: #f2f2f2; }
     .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
     .field {
       display: grid;
@@ -60,7 +60,7 @@
       gap: 8px;
       padding: 8px 12px;
       border: 1px solid #2a2a2a;
-      background: #000;
+      background: #6b1316;
       color: #8a8a8a;
       min-height: 44px;
     }
@@ -94,7 +94,7 @@
     }
     #drop {
       border: 1px dashed #2a2a2a;
-      background: #000;
+      background: #6b1316;
       color: #8a8a8a;
       padding: 16px;
       display: flex;
@@ -102,13 +102,13 @@
       min-height: 0;
       height: 100%;
     }
-    #drop.hot { background: #f2f2f2; color: #000; border-color: #f2f2f2; }
+    #drop.hot { background: #e8e8e8; color: #000; border-color: #f2f2f2; }
     #list { margin-top: 12px; min-height: 0; overflow: auto; font-size: 0.875rem; color: inherit; }
     #list span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #drop.hot #list { color: #000; }
     #tree {
       border: 1px solid #2a2a2a;
-      background: #000;
+      background: #6b1316;
       color: #8a8a8a;
       padding: 16px;
       min-height: 0;
@@ -119,7 +119,7 @@
       flex: 1;
       height: 44px;
       border: 1px solid #2a2a2a;
-      background: #000;
+      background: #6b1316;
       color: #8a8a8a;
       font-weight: 500;
     }
