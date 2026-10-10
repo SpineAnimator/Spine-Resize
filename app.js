@@ -8695,20 +8695,57 @@ window.boneHierarchy = boneHierarchy;
   });
   const withSpineBtn = document.getElementById('with_spine');
   if (withSpineBtn) {
-    withSpineBtn.addEventListener('click', function() {
-      const finput = document.createElement('input');
-      finput.type = 'file';
-      finput.multiple = true;
-      finput.accept = '.json,.skel,.spine,.bytes,.atlas,.png,.jpg,.jpeg,.webp';
-      finput.onchange = function(e) {
-        const newFiles = Array.from(e.target.files);
-        add(newFiles);
+    withSpineBtn.addEventListener('click', async function() {
+      try {
+        // Use File System Access API to pick file open in Spine
+        const handles = await window.showOpenFilePicker({
+          types: [{
+            description: 'Spine files',
+            accept: {
+              'application/json': ['.json'],
+              'application/octet-stream': ['.skel', '.bytes', '.spine'],
+              'image/png': ['.png'],
+              'image/jpeg': ['.jpg', '.jpeg'],
+              'image/webp': ['.webp'],
+              'text/plain': ['.atlas']
+            }
+          }],
+          multiple: true,
+          excludeAcceptAllOption: false
+        });
+        
+        const files = [];
+        for (const handle of handles) {
+          const file = await handle.getFile();
+          // Add file handle reference for writing back later
+          file.fileHandle = handle;
+          files.push(file);
+        }
+        
+        add(files);
         go.disabled = false;
         go.classList.remove('btn');
         go.classList.add('btn', 'white');
         withSpineBtn.remove();
-      };
-      finput.click();
+      } catch (err) {
+        // User cancelled or API not supported - fall back to regular file input
+        if (err.name !== 'AbortError') {
+          console.warn('File System Access API not available, falling back:', err);
+          const finput = document.createElement('input');
+          finput.type = 'file';
+          finput.multiple = true;
+          finput.accept = '.json,.skel,.spine,.bytes,.atlas,.png,.jpg,.jpeg,.webp';
+          finput.onchange = function(e) {
+            const newFiles = Array.from(e.target.files);
+            add(newFiles);
+            go.disabled = false;
+            go.classList.remove('btn');
+            go.classList.add('btn', 'white');
+            withSpineBtn.remove();
+          };
+          finput.click();
+        }
+      }
     });
   }
 
