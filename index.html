@@ -26,9 +26,16 @@
       grid-template-areas:
         "header header"
         "fields fields"
-        "panels panels";
-      grid-template-rows: auto auto 1fr;
+        "panels panels"
+        "actions actions";
+      grid-template-rows: auto auto 1fr auto;
       gap: 16px;
+    }
+    .actions {
+      grid-area: actions;
+      display: flex;
+      gap: 8px;
+      width: 100%;
     }
     header { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; grid-area: header; }
     h1 { margin: 0; font-size: 1.2rem; font-weight: 500; letter-spacing: -0.02em; }
