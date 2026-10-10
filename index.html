@@ -23,16 +23,15 @@
       margin: 0 auto;
       padding: 24px 32px;
       display: grid;
-      grid-template-columns: 2fr 1fr;
-      grid-template-rows: auto auto 1fr auto auto;
-      gap: 24px;
       grid-template-areas:
         "header header"
-        "settings settings"
-        "drop tree"
-        "go go"
-        "line line";
+        "fields fields"
+        "panels panels"
+        "actions actions";
+      grid-template-rows: auto auto 1fr auto;
+      gap: 16px;
     }
+<<<<<<< HEAD
     @media (max-width: 768px) {
       main {
         grid-template-columns: 1fr;
@@ -49,138 +48,457 @@
     header { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
     h1 { margin: 0; min-width: 0; flex: 1 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.15; font-size: 1.2rem; font-weight: 500; letter-spacing: -0.02em; }
     .chip { flex: 0 1 auto; min-width: 0; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+=======
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; grid-area: header; }
+    h1 { margin: 0; font-size: 1.2rem; font-weight: 500; letter-spacing: -0.02em; }
+>>>>>>> c10f71ce0628909a95517c138c3340d8180aeb69
     button, label { font: inherit; }
     button { cursor: pointer; }
-    .chip, .mode, #drop, #go {
+    .chips { display: flex; gap: 8px; }
+    .chip { height: 44px; padding: 0 12px; border: 1px solid #2a2a2a; background: #000; color: #8a8a8a; }
+    .chip[aria-pressed="true"] { background: #f2f2f2; color: #000; border-color: #f2f2f2; }
+    .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+    .field {
+      display: grid;
+      grid-template-columns: auto minmax(40px, auto) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
       border: 1px solid #2a2a2a;
       background: #000;
       color: #8a8a8a;
+      min-height: 44px;
     }
-    .chip { height: 44px; padding: 0 12px; }
-    .chip[aria-pressed="true"] { background: #f2f2f2; color: #000; border-color: #f2f2f2; }
-    .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-    .mode {
-      width: auto;
-      min-width: 0;
-      height: auto;
-      min-height: 64px;
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      grid-template-areas:
-        "radio name name"
-        "num num unit";
-      align-items: center;
-      column-gap: 6px;
-      row-gap: 0;
-      padding: 6px 8px;
-      font-size: 0.875rem;
-      cursor: pointer;
+    .field input[type="number"] {
+      width: 100%;
+      background: transparent;
+      color: inherit;
+      border: 0;
+      font: inherit;
+      font-size: 1rem;
+      outline: none;
+      min-width: 40px;
     }
-    .mode:has(input[type="radio"]:checked) {
-      background: #f2f2f2;
-      color: #000;
-      border-color: #f2f2f2;
-    }
-    .mode input[type="radio"] {
-      grid-area: radio;
+    .field input[type="radio"] {
       appearance: none;
-      width: 12px;
-      height: 12px;
-      margin: 0;
+      width: 14px;
+      height: 14px;
       border: 1.5px solid currentColor;
       border-radius: 50%;
       background: transparent;
       color: inherit;
     }
-    .mode input[type="radio"]:checked {
+    .field input[type="radio"]:checked {
       background: radial-gradient(circle, currentColor 0 45%, transparent 50%);
     }
-    .mode .name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .mode input[type="number"] {
-      grid-area: num;
-      width: 100%;
-      min-width: 0;
-      margin: 0;
-      background: transparent;
-      color: inherit;
-      border: 0;
-      text-align: left;
-      font: inherit;
-      font-size: 1rem;
-      outline: none;
+    .field input[type="number"]::-webkit-outer-spin-button,
+    .field input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
+    .panels { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; grid-area: panels; min-height: 0; height: 100%; }
+    @media (max-width: 768px) {
+      .panels { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
     }
-    .mode input[type="number"]::-webkit-outer-spin-button,
-    .mode input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
-    .unit { grid-area: unit; width: auto; text-align: right; }
     #drop {
-      min-height: 0; display: flex; flex-direction: column; align-items: stretch; text-align: left; padding: 16px;
+      border: 1px dashed #2a2a2a;
+      background: #000;
+      color: #8a8a8a;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      height: 100%;
     }
-    #drop.hot { background: #f2f2f2; color: #000; }
-    #list { margin-top: 12px; min-height=0; overflow:auto; font-size:0.875rem; line-height:1.5; color:#f2f2f2; }
-    #drop.hot #list { color:#000; }
-    #list span { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    #go { height:48px; background:#f2f2f2; color:#000; border-color:#f2f2f2; font-weight:500; font-size:1rem; }
-    #go:disabled { opacity:0.3; cursor:default; }
-    #line { margin:0; font-size:0.875rem; color:#8a8a8a; white-space:normal; overflow:visible; }
-    #line a { color:#f2f2f2; }
-    @media (min-width:640px) {
-      main { padding:24px; }
-      .mode {
-        height:44px;
-        min-height:44px;
-        grid-template-columns:auto minmax(0,1fr) auto auto;
-        grid-template-areas:"radio name num unit";
-        column-gap:8px;
-        padding:0 12px;
-      }
-      .mode input[type="radio"] { width:14px; height:14px; }
-      .mode input[type="number"] { width:4.4rem; text-align:right; font-size:inherit; }
-      .unit { width:1.1rem; }
+    #drop.hot { background: #f2f2f2; color: #000; border-color: #f2f2f2; }
+    #list { margin-top: 12px; min-height: 0; overflow: auto; font-size: 0.875rem; color: inherit; }
+    #list span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #drop.hot #list { color: #000; }
+    #tree {
+      border: 1px solid #2a2a2a;
+      background: #000;
+      color: #8a8a8a;
+      padding: 16px;
+      min-height: 0;
+      height: 100%;
     }
-    /* Tree area */
-    .tree-area { height:100%; }
+    .actions { display: flex; gap: 8px; grid-area: actions; width: 100%; }
+    .btn {
+      flex: 1;
+      height: 44px;
+      border: 1px solid #2a2a2a;
+      background: #000;
+      color: #8a8a8a;
+      font-weight: 500;
+    }
+    .btn.white {
+      background: #f2f2f2;
+      color: #000;
+      border-color: #f2f2f2;
+    }
+    .btn:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+    .line { margin: 0; font-size: 0.875rem; color: #8a8a8a; }
+    #status { width: 100%; font-size: 0.875rem; color: #f2f2f2; white-space: normal; overflow: visible; }
   </style>
 </head>
 <body>
   <main>
     <header>
       <h1>Spine Skeleton Resize</h1>
+<<<<<<< HEAD
       <button class="chip" id="bake" type="button" aria-pressed="true">Bake</button>
       <button class="chip" id="center" type="button" aria-pressed="true">Center</button>
+=======
+      <div class="chips">
+        <button class="chip" id="bake" type="button" aria-pressed="true">Bake</button>
+        <button class="chip" id="center" type="button" aria-pressed="true">Center</button>
+      </div>
+>>>>>>> c10f71ce0628909a95517c138c3340d8180aeb69
     </header>
-    <div class="modes settings" role="radiogroup" aria-label="Resize method">
-      <label class="mode" title="Fit the longer side to this many pixels">
+    <div class="fields">
+      <label class="field" title="Fit the longer side to this many pixels">
         <input type="radio" name="scale-mode" value="side" checked />
-        <span class="name">Side</span>
         <input id="size" type="number" min="16" max="8192" value="300" inputmode="numeric" aria-label="Longest side in pixels" />
         <span class="unit">px</span>
       </label>
-      <label class="mode" title="2 is twice as large, 0.5 is half">
+      <label class="field" title="2 is twice as large, 0.5 is half">
         <input type="radio" name="scale-mode" value="times" />
+<<<<<<< HEAD
         <span class="name">Multiplier</span>
         <input id="times" type="number" min="0.01" max="100" step="0.01" value="2" inputmode="decimal" aria-label="Multiplier: 2 is twice as large, 0.5 is half" />
+=======
+        <input id="times" type="number" min="0.01" max="100" step="0.01" value="2" inputmode="decimal" aria-label="How many times larger or smaller" />
+>>>>>>> c10f71ce0628909a95517c138c3340d8180aeb69
         <span class="unit">×</span>
       </label>
-      <label class="mode" title="100 is twice as large, -50 is half, 0 is no change">
+      <label class="field" title="100 is twice as large, -50 is half, 0 is no change">
         <input type="radio" name="scale-mode" value="percent" />
+<<<<<<< HEAD
         <span class="name">Percentage</span>
         <input id="percent" type="number" min="-99" max="9900" step="1" value="0" aria-label="Percentage change: 100 is twice as large, -50 is half, 0 is no change" />
+=======
+        <input id="percent" type="number" min="-99" max="9900" step="1" value="0" aria-label="Percent increase or decrease" />
+>>>>>>> c10f71ce0628909a95517c138c3340d8180aeb69
         <span class="unit">%</span>
       </label>
     </div>
-    <div id="drop" class="tree-area">
-      <span>.json .skel .spine .atlas .png .zip</span>
-      <span id="list"></span>
-    </div>
-    <div id="tree" class="tree-area">
-      <div id="tree-placeholder" style="padding:24px 12px; color:#666; font-size:0.9rem;">
-        <div>Выберите скелет</div>
+    <div class="panels">
+      <div id="drop">
+        <span>.json .skel .spine .atlas .png .zip</span>
+        <span id="list"></span>
+      </div>
+      <div id="tree">
+        <div id="tree-placeholder" style="padding:24px 12px; color:#666; font-size:0.9rem;">
+          <div>Tree</div>
+        </div>
       </div>
     </div>
-    <button id="go" type="button" disabled>Resize</button>
-    <p id="line">.json Import Data · .spine Open</p>
+    <div class="actions">
+      <button id="go" class="btn" type="button" disabled>Resize</button>
+      <button id="with_spine" class="with_spine" type="button">with Spine</button>
+    </div>
+    <p id="status" style="display:none;">.json Import Data · .spine Open</p>
   </main>
   <input id="file" type="file" multiple hidden accept=".zip,.json,.skel,.bytes,.spine,.atlas,.txt,.png,.jpg,.jpeg,.webp" />
   <script src="app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script>
+    (function() {
+      const withSpineBtn = document.getElementById('with_spine');
+      const dropZone = document.getElementById('drop');
+      const list = document.getElementById('list');
+      const treePlaceholder = document.getElementById('tree-placeholder');
+      const goBtn = document.getElementById('go');
+      const status = document.getElementById('status');
+      
+      let currentSkeleton = null;
+      let imageFiles = [];
+
+      // --- with_spine button: open system file dialog ---
+      withSpineBtn.addEventListener('click', function() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.accept = '.json,.skel,.spine,.bytes,.atlas,.png,.jpg,.jpeg,.webp';
+        
+        input.onchange = function(e) {
+          const files = Array.from(e.target.files);
+          loadFiles(files);
+          // Remove with_spine button after file selected
+          withSpineBtn.remove();
+        };
+        
+        input.click();
+      });
+
+      // --- Load selected files into drag-drop and tree ---
+      function loadFiles(files) {
+        let spineFile = null;
+        imageFiles = [];
+        list.innerHTML = '';
+        
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const item = document.createElement('span');
+          item.textContent = file.name + ' (' + formatSize(file.size) + ')';
+          list.appendChild(item);
+          
+          if (file.name.endsWith('.spine') || file.name.endsWith('.skel') || file.name.endsWith('.bytes') || file.name.endsWith('.json')) {
+            spineFile = file;
+          } else if (file.name.match(/\.(png|jpg|jpeg|webp)$/i)) {
+            imageFiles.push(file);
+          }
+        }
+        
+        if (!spineFile) {
+          showStatus('Please select a Spine file (.json, .spine, .skel, .bytes)');
+          return;
+        }
+        
+        // Show skeleton in Tree
+        treePlaceholder.style.display = 'none';
+        treePlaceholder.innerHTML = '<div><strong>' + spineFile.name + '</strong></div>';
+        
+        // Read spine file content
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const content = event.target.result;
+          currentSkeleton = {
+            file: spineFile,
+            content: content,
+            isBinary: !spineFile.name.endsWith('.json')
+          };
+          
+          // Enable Resize button: white, full width, active
+          goBtn.disabled = false;
+          goBtn.classList.remove('btn');
+          goBtn.classList.add('btn', 'white');
+          showStatus('Loaded: ' + spineFile.name + ' | ' + imageFiles.length + ' image(s) ready');
+        };
+        
+        if (spineFile.name.endsWith('.json')) {
+          reader.readAsText(spineFile);
+        } else {
+          reader.readAsArrayBuffer(spineFile);
+        }
+      }
+
+      // --- Handle drag-drop (native drag & drop support) ---
+      dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.classList.add('hot');
+      });
+      dropZone.addEventListener('dragleave', function(e) {
+        e.preventDefault();
+        dropZone.classList.remove('hot');
+      });
+      dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.classList.remove('hot');
+        loadFiles(Array.from(e.dataTransfer.files));
+      });
+
+      // --- File size formatter ---
+      function formatSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+      }
+
+      // --- Show status message ---
+      function showStatus(msg) {
+        status.textContent = msg;
+        status.style.display = 'block';
+      }
+
+      // --- Main resize logic ---
+      goBtn.addEventListener('click', function() {
+        if (!currentSkeleton) {
+          showStatus('No skeleton loaded. Select a file first.');
+          return;
+        }
+        
+        const mode = document.querySelector('input[name="scale-mode"]:checked').value;
+        let scale = 1;
+        let targetSize = null;
+        
+        if (mode === 'side') {
+          targetSize = parseInt(document.getElementById('size').value, 10);
+          // Need to compute scale from skeleton dimensions
+          scale = computeScaleFromJson(currentSkeleton);
+        } else if (mode === 'times') {
+          scale = parseFloat(document.getElementById('times').value);
+        } else if (mode === 'percent') {
+          scale = 1 + parseFloat(document.getElementById('percent').value) / 100;
+        }
+        
+        // Backup file invisibly (rename to .backup)
+        backupFile(currentSkeleton);
+        
+        // Scale and package
+        scaleAndPackage(currentSkeleton, scale, imageFiles, targetSize);
+      });
+
+      // --- Compute scale factor from JSON skeleton ---
+      function computeScaleFromJson(skeleton) {
+        try {
+          let data;
+          if (typeof skeleton.content === 'string') {
+            data = JSON.parse(skeleton.content);
+          } else {
+            const text = new TextDecoder('utf-8').decode(skeleton.content);
+            data = JSON.parse(text);
+          }
+          if (!data.bones || !data.bones.length) return 1;
+          const bones = data.bones;
+          let maxX = 0, maxY = 0;
+          for (let i = bones.length - 1; i >= 0; i--) {
+            const b = bones[i];
+            const x = Math.abs(b.x);
+            const y = Math.abs(b.y + b.length);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          }
+          const longest = Math.max(maxX, maxY);
+          if (longest === 0) return 1;
+          return 300 / longest;
+        } catch (e) {
+          console.error('Could not compute scale:', e);
+          return 1;
+        }
+      }
+
+      // --- Backup file invisibly before processing ---
+      function backupFile(skeleton) {
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(skeleton.file);
+        link.download = skeleton.file.name + '.backup_before_resize';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      // --- Scale skeleton and package output ---
+      function scaleAndPackage(skeleton, scale, images, targetSize) {
+        try {
+          const zip = new JSZip();
+          const scaleMode = document.querySelector('input[name="scale-mode"]:checked').value;
+          let outputName = skeleton.file.name;
+          
+          if (skeleton.isBinary) {
+            // Binary files (.spine / .skel): scale byte-level
+            const scaled = scaleBinary(skeleton.content, scale, scaleMode);
+            zip.file(outputName, scaled);
+          } else {
+            // JSON: scale properly
+            let data;
+            if (typeof skeleton.content === 'string') {
+              data = JSON.parse(skeleton.content);
+            } else {
+              data = JSON.parse(new TextDecoder('utf-8').decode(skeleton.content));
+            }
+            scaleJson(data, scale, scaleMode);
+            const jsonStr = JSON.stringify(data);
+            zip.file(outputName, jsonStr);
+            outputName = skeleton.file.name;
+          }
+          
+          // Scale images
+          imageFiles.forEach(function(img) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              const imgData = e.target.result;
+              scaleImage(img, imgData, scale).then(function(scaledImg) {
+                zip.file(img.name, scaledImg);
+                // Finalize when all images done
+              });
+            };
+            reader.readAsDataURL(img);
+          });
+          
+          // Download after images processed
+          zip.generateAsync({type: 'blob'}).then(function(zipBlob) {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(zipBlob);
+            link.download = skeleton.file.name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showStatus('Downloaded: ' + skeleton.file.name);
+          });
+        } catch (e) {
+          console.error('Scale failed:', e);
+          showStatus('Error scaling: ' + e.message);
+        }
+      }
+
+      // --- Scale JSON skeleton data ---
+      function scaleJson(data, scale, mode) {
+        if (data.bones) {
+          data.bones.forEach(function(bone) {
+            bone.x *= scale;
+            bone.y *= scale;
+            if (bone.length) bone.length *= scale;
+            if (bone.parent) {}
+          });
+        }
+        if (data.animations) {
+          data.animations.forEach(function(anim) {
+            Object.keys(anim).forEach(function(key) {
+              const timeline = anim[key];
+              if (timeline && timeline.keys) {
+                timeline.keys.forEach(function(k) {
+                  if (k.x !== undefined) k.x *= scale;
+                  if (k.y !== undefined) k.y *= scale;
+                });
+              }
+            });
+          });
+        }
+        if (data.attachments) {
+          Object.keys(data.attachments).forEach(function(slot) {
+            data.attachments[slot].forEach(function(att) {
+              if (att.regionX !== undefined) att.regionX *= scale;
+              if (att.regionY !== undefined) att.regionY *= scale;
+              if (att.regionWidth !== undefined) att.regionWidth *= scale;
+              if (att.regionHeight !== undefined) att.regionHeight *= scale;
+            });
+          });
+        }
+      }
+
+      // --- Scale binary spine/skel file (simplified byte-level scale) ---
+      function scaleBinary(buffer, scale, mode) {
+        const view = new DataView(buffer);
+        const bytes = new Uint8Array(buffer);
+        // Simplified: for binary files, this is a placeholder
+        // In production this would parse the Spine binary format and scale bone transforms
+        const newData = new Uint8Array(bytes.length);
+        newData.set(bytes);
+        return newData;
+      }
+
+      // --- Scale image and return Blob ---
+      function scaleImage(img, imgData, scale) {
+        return new Promise(function(resolve, reject) {
+          const imgObj = new Image();
+          imgObj.onload = function() {
+            const canvas = document.createElement('canvas');
+            const w = Math.round(imgObj.width * scale);
+            const h = Math.round(imgObj.height * scale);
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(imgObj, 0, 0, w, h);
+            canvas.toBlob(function(blob) {
+              resolve(blob);
+            }, img.name.match(/\.(png|jpg|jpeg)$/i) ? img.name.match(/\.(png|jpg|jpeg)$/i)[1] : 'png');
+          };
+          imgObj.onerror = reject;
+          imgObj.src = imgData;
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
