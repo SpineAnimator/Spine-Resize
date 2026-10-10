@@ -40,7 +40,7 @@
     .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
     .field {
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      grid-template-columns: auto minmax(40px, auto) auto;
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
@@ -48,6 +48,16 @@
       background: #000;
       color: #8a8a8a;
       min-height: 44px;
+    }
+    .field input[type="number"] {
+      width: 100%;
+      background: transparent;
+      color: inherit;
+      border: 0;
+      font: inherit;
+      font-size: 1rem;
+      outline: none;
+      min-width: 40px;
     }
     .field input[type="radio"] {
       appearance: none;
@@ -60,15 +70,6 @@
     }
     .field input[type="radio"]:checked {
       background: radial-gradient(circle, currentColor 0 45%, transparent 50%);
-    }
-    .field input[type="number"] {
-      width: 100%;
-      background: transparent;
-      color: inherit;
-      border: 0;
-      font: inherit;
-      font-size: 1rem;
-      outline: none;
     }
     .field input[type="number"]::-webkit-outer-spin-button,
     .field input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
