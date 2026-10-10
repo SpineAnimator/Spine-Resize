@@ -8783,6 +8783,22 @@ window.boneHierarchy = boneHierarchy;
         bake: bake.getAttribute("aria-pressed") === "true",
         center: center.getAttribute("aria-pressed") === "true"
       });
+      
+      // Write files back to original location if they have fileHandle
+      for (const entry of result.entries) {
+        const originalFile = files.find(f => f.name === entry.path);
+        if (originalFile && originalFile.fileHandle) {
+          try {
+            const writable = await originalFile.fileHandle.createWritable();
+            await writable.write(entry.data);
+            await writable.close();
+            console.log(`Written back: ${entry.path}`);
+          } catch (err) {
+            console.warn(`Failed to write back ${entry.path}:`, err);
+          }
+        }
+      }
+      
       const blob = await zipEntries(result.entries);
       revokeZip();
       const url = URL.createObjectURL(blob);
