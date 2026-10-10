@@ -31,7 +31,6 @@
       grid-template-rows: auto auto 1fr auto;
       gap: 16px;
     }
-<<<<<<< HEAD
     @media (max-width: 768px) {
       main {
         grid-template-columns: 1fr;
@@ -48,10 +47,6 @@
     header { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
     h1 { margin: 0; min-width: 0; flex: 1 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.15; font-size: 1.2rem; font-weight: 500; letter-spacing: -0.02em; }
     .chip { flex: 0 1 auto; min-width: 0; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-=======
-    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; grid-area: header; }
-    h1 { margin: 0; font-size: 1.2rem; font-weight: 500; letter-spacing: -0.02em; }
->>>>>>> c10f71ce0628909a95517c138c3340d8180aeb69
     button, label { font: inherit; }
     button { cursor: pointer; }
     .chips { display: flex; gap: 8px; }
@@ -145,15 +140,8 @@
   <main>
     <header>
       <h1>Spine Skeleton Resize</h1>
-<<<<<<< HEAD
       <button class="chip" id="bake" type="button" aria-pressed="true">Bake</button>
       <button class="chip" id="center" type="button" aria-pressed="true">Center</button>
-=======
-      <div class="chips">
-        <button class="chip" id="bake" type="button" aria-pressed="true">Bake</button>
-        <button class="chip" id="center" type="button" aria-pressed="true">Center</button>
-      </div>
->>>>>>> c10f71ce0628909a95517c138c3340d8180aeb69
     </header>
     <div class="fields">
       <label class="field" title="Fit the longer side to this many pixels">
@@ -163,22 +151,14 @@
       </label>
       <label class="field" title="2 is twice as large, 0.5 is half">
         <input type="radio" name="scale-mode" value="times" />
-<<<<<<< HEAD
         <span class="name">Multiplier</span>
         <input id="times" type="number" min="0.01" max="100" step="0.01" value="2" inputmode="decimal" aria-label="Multiplier: 2 is twice as large, 0.5 is half" />
-=======
-        <input id="times" type="number" min="0.01" max="100" step="0.01" value="2" inputmode="decimal" aria-label="How many times larger or smaller" />
->>>>>>> c10f71ce0628909a95517c138c3340d8180aeb69
         <span class="unit">×</span>
       </label>
       <label class="field" title="100 is twice as large, -50 is half, 0 is no change">
         <input type="radio" name="scale-mode" value="percent" />
-<<<<<<< HEAD
         <span class="name">Percentage</span>
         <input id="percent" type="number" min="-99" max="9900" step="1" value="0" aria-label="Percentage change: 100 is twice as large, -50 is half, 0 is no change" />
-=======
-        <input id="percent" type="number" min="-99" max="9900" step="1" value="0" aria-label="Percent increase or decrease" />
->>>>>>> c10f71ce0628909a95517c138c3340d8180aeb69
         <span class="unit">%</span>
       </label>
     </div>
