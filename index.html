@@ -16,6 +16,14 @@
     body {
       font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
       overflow: hidden;
+      background-color: #1a1a1a;
+      background-image:
+        linear-gradient(45deg, #222 25%, transparent 25%),
+        linear-gradient(-45deg, #222 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #222 75%),
+        linear-gradient(-45deg, transparent 75%, #222 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
     }
     main {
       width: 100%;
@@ -107,14 +115,20 @@
       .panels { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
     }
     #drop {
-      border: 1px dashed #2a2a2a;
-      background: #000;
+      border: 2px dashed #444;
+      background: rgba(0,0,0,0.5);
       color: #8a8a8a;
       padding: 16px;
       display: flex;
       flex-direction: column;
       min-height: 0;
       height: 100%;
+      transition: border-color 0.2s, background-color 0.2s;
+    }
+    #drop.hot {
+      border-color: #8a1c1c;
+      background: rgba(138,28,28,0.3);
+      color: #f2f2f2;
     }
     #drop.hot { background: #e8e8e8; color: #000; border-color: #f2f2f2; }
     #list { margin-top: 12px; min-height: 0; overflow: auto; font-size: 0.875rem; color: inherit; }
@@ -229,7 +243,7 @@
     <p id="status" style="display:none;">.json Import Data · .spine Open</p>
   </main>
   <input id="file" type="file" multiple hidden accept=".zip,.json,.skel,.bytes,.spine,.atlas,.txt,.png,.jpg,.jpeg,.webp" />
-  <script src="https://spineanimator.github.io/Spine-Resize/app.js?v=6"></script>
+  <script src="https://spineanimator.github.io/Spine-Resize/app.js?v=7?v=7"></script>
   <script src="https://spineanimator.github.io/Spine-Resize/spine-bridge/content.js?v=6"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   
