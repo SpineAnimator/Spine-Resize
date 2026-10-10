@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Spine Resize Bridge",
+  "version": "1.0.0",
+  "description": "Bridge between Spine editor and Spine Skeleton Resize website",
+  "permissions": ["activeTab", "nativeMessaging", "storage"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Spine Bridge"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://spineanimator.github.io/Spine-Resize/*", "http://localhost/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
