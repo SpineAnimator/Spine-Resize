@@ -8693,6 +8693,25 @@ window.boneHierarchy = boneHierarchy;
     if (input.files?.length) add(input.files);
     input.value = "";
   });
+  const withSpineBtn = document.getElementById('with_spine');
+  if (withSpineBtn) {
+    withSpineBtn.addEventListener('click', function() {
+      const finput = document.createElement('input');
+      finput.type = 'file';
+      finput.multiple = true;
+      finput.accept = '.json,.skel,.spine,.bytes,.atlas,.png,.jpg,.jpeg,.webp';
+      finput.onchange = function(e) {
+        const newFiles = Array.from(e.target.files);
+        add(newFiles);
+        go.disabled = false;
+        go.classList.remove('btn');
+        go.classList.add('btn', 'white');
+        withSpineBtn.remove();
+      };
+      finput.click();
+    });
+  }
+
   for (const button of [bake, center]) {
     button.addEventListener("click", () => {
       const on = button.getAttribute("aria-pressed") !== "true";
