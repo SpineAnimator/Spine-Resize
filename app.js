@@ -8693,59 +8693,108 @@ window.boneHierarchy = boneHierarchy;
     if (input.files?.length) add(input.files);
     input.value = "";
   });
-  const withSpineBtn = document.getElementById('with_spine');
-  if (withSpineBtn) {
-    withSpineBtn.addEventListener('click', async function() {
+  // Bridge state: remember the original project path so we can write results back.
+  let bridgeProjectPath = null;
+  let bridgeOriginalName = null;
+  let bridgeIsSpine = false;
+
+  async function bridgeLoad() {
+    if (typeof window.spineBridge === 'undefined' || !window.spineBridge) return false;
+    try {
+      const info = await window.spineBridge.getOpenSpineFile();
+      if (!info || !info.data || !info.data.length) return false;
+      bridgeProjectPath = info.path;
+      bridgeOriginalName = info.path.split('/').pop();
+      const ext = (bridgeOriginalName.split('.').pop() || '').toLowerCase();
+      bridgeIsSpine = (ext === 'spine' || ext === 'skel' || ext === 'bytes');
+      const file = new File([new Uint8Array(info.data)], bridgeOriginalName, { type: 'application/octet-stream' });
+      add([file]);
       try {
-        // Use File System Access API to pick file open in Spine
-        const handles = await window.showOpenFilePicker({
-          types: [{
-            description: 'Spine files',
-            accept: {
-              'application/json': ['.json'],
-              'application/octet-stream': ['.skel', '.bytes', '.spine'],
-              'image/png': ['.png'],
-              'image/jpeg': ['.jpg', '.jpeg'],
-              'image/webp': ['.webp'],
-              'text/plain': ['.atlas']
-            }
-          }],
-          multiple: true,
-          excludeAcceptAllOption: false
-        });
-        
-        const files = [];
-        for (const handle of handles) {
-          const file = await handle.getFile();
-          // Add file handle reference for writing back later
+        const imgs = await window.spineBridge.getSiblingImages(info.path);
+        if (imgs && imgs.length) {
+          const dtFiles = [];
+          for (const im of imgs) {
+            const r = await window.spineBridge.readFileByPath(im.path);
+            if (r && r.data) dtFiles.push(new File([new Uint8Array(r.data)], im.name, { type: 'application/octet-stream' }));
+          }
+          if (dtFiles.length) add(dtFiles);
+        }
+      } catch (e) { /* ignore image fetch errors */ }
+      go.disabled = false;
+      go.classList.remove('btn');
+      go.classList.add('btn', 'white');
+      const ws = document.getElementById('with_spine');
+      if (ws) ws.remove();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function bridgeFallbackPicker() {
+    // Use File System Access API to pick files open in Spine
+    if (!('showOpenFilePicker' in window)) {
+      alert('File System Access API not supported in this browser.\nPlease use Chrome or Edge to pick files open in Spine.');
+      return;
+    }
+    
+    window.showOpenFilePicker({
+      types: [{
+        description: 'Spine files',
+        accept: {
+          'application/json': ['.json'],
+          'application/octet-stream': ['.skel', '.bytes', '.spine'],
+          'image/png': ['.png'],
+          'image/jpeg': ['.jpg', '.jpeg'],
+          'image/webp': ['.webp'],
+          'text/plain': ['.atlas']
+        }
+      }],
+      multiple: true,
+      excludeAcceptAllOption: false
+    }).then(handles => {
+      const files = [];
+      for (const handle of handles) {
+        handle.getFile().then(file => {
           file.fileHandle = handle;
           files.push(file);
-        }
-        
-        add(files);
-        go.disabled = false;
-        go.classList.remove('btn');
-        go.classList.add('btn', 'white');
-        withSpineBtn.remove();
-      } catch (err) {
-        // User cancelled or API not supported - fall back to regular file input
-        if (err.name !== 'AbortError') {
-          console.warn('File System Access API not available, falling back:', err);
-          const finput = document.createElement('input');
-          finput.type = 'file';
-          finput.multiple = true;
-          finput.accept = '.json,.skel,.spine,.bytes,.atlas,.png,.jpg,.jpeg,.webp';
-          finput.onchange = function(e) {
-            const newFiles = Array.from(e.target.files);
-            add(newFiles);
+          if (files.length === handles.length) {
+            add(files);
             go.disabled = false;
             go.classList.remove('btn');
             go.classList.add('btn', 'white');
-            withSpineBtn.remove();
-          };
-          finput.click();
-        }
+            const ws = document.getElementById('with_spine');
+            if (ws) ws.remove();
+          }
+        });
       }
+    }).catch(err => {
+      if (err.name !== 'AbortError') {
+        console.warn('File System Access API error:', err);
+        // Last resort: regular file input
+        const finput = document.createElement('input');
+        finput.type = 'file';
+        finput.multiple = true;
+        finput.accept = '.json,.skel,.spine,.bytes,.atlas,.png,.jpg,.jpeg,.webp';
+        finput.onchange = function(e) {
+          const newFiles = Array.from(e.target.files);
+          add(newFiles);
+          go.disabled = false;
+          go.classList.remove('btn');
+          go.classList.add('btn', 'white');
+          const ws = document.getElementById('with_spine');
+          if (ws) ws.remove();
+        };
+        finput.click();
+      }
+    });
+  }
+
+  const withSpineBtn = document.getElementById('with_spine');
+  if (withSpineBtn) {
+    withSpineBtn.addEventListener('click', async function() {
+      const ok = await bridgeLoad();
+      if (!ok) bridgeFallbackPicker();
     });
   }
 
@@ -8784,17 +8833,30 @@ window.boneHierarchy = boneHierarchy;
         center: center.getAttribute("aria-pressed") === "true"
       });
       
-      // Write files back to original location if they have fileHandle
-      for (const entry of result.entries) {
-        const originalFile = files.find(f => f.name === entry.path);
-        if (originalFile && originalFile.fileHandle) {
-          try {
-            const writable = await originalFile.fileHandle.createWritable();
-            await writable.write(entry.data);
-            await writable.close();
-            console.log(`Written back: ${entry.path}`);
-          } catch (err) {
-            console.warn(`Failed to write back ${entry.path}:`, err);
+      // Write the resized project file back to the original location via the bridge.
+      if (bridgeProjectPath && typeof window.spineBridge !== 'undefined' && window.spineBridge) {
+        try {
+          const entry = result.entries.find(e => e.path === bridgeOriginalName);
+          if (entry) {
+            await window.spineBridge.saveFile(bridgeProjectPath, Array.from(entry.data));
+            line.replaceChildren(document.createTextNode(result.line + '  (written back to ' + bridgeOriginalName + ')'));
+          }
+        } catch (err) {
+          console.warn('Bridge write-back failed:', err);
+        }
+      } else {
+        // Fallback: write back any entry whose source file had a fileHandle.
+        for (const entry of result.entries) {
+          const originalFile = files.find(f => f.name === entry.path);
+          if (originalFile && originalFile.fileHandle) {
+            try {
+              const writable = await originalFile.fileHandle.createWritable();
+              await writable.write(entry.data);
+              await writable.close();
+              console.log(`Written back: ${entry.path}`);
+            } catch (err) {
+              console.warn(`Failed to write back ${entry.path}:`, err);
+            }
           }
         }
       }
