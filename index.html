@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Spine Resize</title>
+  <title>Spine Skeleton Resize</title>
   <meta name="theme-color" content="#000000" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23000'/%3E%3Crect x='7' y='7' width='18' height='18' fill='none' stroke='%23f2f2f2' stroke-width='2'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -46,8 +46,9 @@
           "line";
       }
     }
-    header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 0; }
-    h1 { margin: 0; min-width: 0; flex: 1 1 12rem; overflow: visible; white-space: normal; line-height: 1.15; font-size: 1.2rem; font-weight: 500; letter-spacing: -0.02em; }
+    header { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; min-width: 0; overflow: hidden; }
+    h1 { margin: 0; min-width: 0; flex: 1 1 auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.15; font-size: 1.2rem; font-weight: 500; letter-spacing: -0.02em; }
+    .chip { flex: 0 1 auto; min-width: 0; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     button, label { font: inherit; }
     button { cursor: pointer; }
     .chip, .mode, #drop, #go {
@@ -143,7 +144,7 @@
 <body>
   <main>
     <header>
-      <h1>Spine Resize</h1>
+      <h1>Spine Skeleton Resize</h1>
       <button class="chip" id="bake" type="button" aria-pressed="true">Bake</button>
       <button class="chip" id="center" type="button" aria-pressed="true">Center</button>
     </header>
@@ -156,14 +157,14 @@
       </label>
       <label class="mode" title="2 is twice as large, 0.5 is half">
         <input type="radio" name="scale-mode" value="times" />
-        <span class="name">Times</span>
-        <input id="times" type="number" min="0.01" max="100" step="0.01" value="2" inputmode="decimal" aria-label="How many times larger or smaller" />
+        <span class="name">Multiplier</span>
+        <input id="times" type="number" min="0.01" max="100" step="0.01" value="2" inputmode="decimal" aria-label="Multiplier: 2 is twice as large, 0.5 is half" />
         <span class="unit">×</span>
       </label>
       <label class="mode" title="100 is twice as large, -50 is half, 0 is no change">
         <input type="radio" name="scale-mode" value="percent" />
-        <span class="name">Percent</span>
-        <input id="percent" type="number" min="-99" max="9900" step="1" value="0" aria-label="Percent increase or decrease" />
+        <span class="name">Percentage</span>
+        <input id="percent" type="number" min="-99" max="9900" step="1" value="0" aria-label="Percentage change: 100 is twice as large, -50 is half, 0 is no change" />
         <span class="unit">%</span>
       </label>
     </div>
