@@ -1,0 +1,9 @@
+{
+  "name": "spinebridge",
+  "description": "Spine Resize Bridge native messaging host",
+  "path": "/Volumes/Work/SpineSkeletonResize/sr/SpineResize/Spine-Resize/spine-bridge/spinebridge.py",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://*"
+  ]
+}

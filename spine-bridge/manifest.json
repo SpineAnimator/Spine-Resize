@@ -10,7 +10,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://spineanimator.github.io/Spine-Resize/*", "http://localhost/*"],
+      "matches": ["https://spineanimator.github.io/Spine-Resize/*", "http://localhost/*", "file:///*"],
       "js": ["content.js"]
     }
   ],
@@ -18,8 +18,8 @@
     "service_worker": "background.js"
   },
   "icons": {
-    "16": "icon.png",
-    "48": "icon.png",
-    "128": "icon.png"
+    "16": "icon_16.png",
+    "48": "icon_48.png",
+    "128": "icon_128.png"
   }
 }

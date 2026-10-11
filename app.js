@@ -8901,7 +8901,11 @@ window.boneHierarchy = boneHierarchy;
       list.appendChild(row);
     }
     go.disabled = !files.length || busy;
-    if (!files.length && !busy) line.textContent = ".json Import Data \xB7 .spine Open";
+    if (!files.length && !busy) {
+      const link = line.querySelector("a");
+      line.textContent = ".json Import Data \xB7 .spine Open";
+      if (link) line.appendChild(link);
+    }
   }
   function fileKey(file) {
     return file.name + "\0" + file.size + "\0" + file.lastModified;
@@ -9145,13 +9149,64 @@ window.boneHierarchy = boneHierarchy;
       try {
         const ok = await bridgeLoad();
         if (!ok) {
-          line.textContent = 'Spine bridge not found. Install the Spine Resize Bridge extension and restart Spine.';
+          // Provide one-click installer links
+          const installerLink = document.createElement('a');
+          installerLink.href = 'spine-bridge/install_bridge.py';
+          installerLink.download = 'install_bridge.py';
+          installerLink.textContent = '⚡ Run Auto-Installer (Python)';
+          installerLink.style.color = '#ff6b6b';
+          installerLink.style.textDecoration = 'underline';
+          installerLink.style.cursor = 'pointer';
+          installerLink.style.marginLeft = '8px';
+          installerLink.style.fontWeight = 'bold';
+          
+          const guideLink = document.createElement('a');
+          guideLink.href = 'INSTALL_BRIDGE.md';
+          guideLink.target = '_blank';
+          guideLink.textContent = '📖 Manual Install Guide';
+          guideLink.style.color = '#6bb3ff';
+          guideLink.style.textDecoration = 'underline';
+          guideLink.style.cursor = 'pointer';
+          guideLink.style.marginLeft = '8px';
+          
+          line.textContent = '';
+          line.appendChild(document.createTextNode('Spine bridge not connected. '));
+          line.appendChild(installerLink);
+          line.appendChild(document.createTextNode(' '));
+          line.appendChild(guideLink);
+          line.appendChild(document.createTextNode(' — one-time setup, then everything is fully automatic.'));
+          
           withSpineBtn.disabled = false;
           return;
         }
         line.textContent = 'Loaded from Spine';
       } catch (e) {
-        line.textContent = 'Spine bridge error: ' + (e.message || e);
+        const installerLink = document.createElement('a');
+        installerLink.href = 'spine-bridge/install_bridge.py';
+        installerLink.download = 'install_bridge.py';
+        installerLink.textContent = '⚡ Run Auto-Installer (Python)';
+        installerLink.style.color = '#ff6b6b';
+        installerLink.style.textDecoration = 'underline';
+        installerLink.style.cursor = 'pointer';
+        installerLink.style.marginLeft = '8px';
+        installerLink.style.fontWeight = 'bold';
+        
+        const guideLink = document.createElement('a');
+        guideLink.href = 'INSTALL_BRIDGE.md';
+        guideLink.target = '_blank';
+        guideLink.textContent = '📖 Manual Install Guide';
+        guideLink.style.color = '#6bb3ff';
+        guideLink.style.textDecoration = 'underline';
+        guideLink.style.cursor = 'pointer';
+        guideLink.style.marginLeft = '8px';
+        
+        line.textContent = '';
+        line.appendChild(document.createTextNode('Spine bridge error: ' + (e.message || e) + '. '));
+        line.appendChild(installerLink);
+        line.appendChild(document.createTextNode(' '));
+        line.appendChild(guideLink);
+        line.appendChild(document.createTextNode(' — one-time setup, then fully automatic.'));
+        
         withSpineBtn.disabled = false;
         return;
       }
