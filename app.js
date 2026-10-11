@@ -7682,6 +7682,15 @@
   function measureSpine(inflated) {
     return scaleSpineInflated(inflated, 1).stats;
   }
+  // Extract bone names from a raw .spine binary (same anchor scan used for scaling).
+  function extractSpineBones(inflated) {
+    const names = [];
+    for (const i of findAll(inflated, BONE_ANCHOR)) {
+      const b = parseBone(inflated, i);
+      if (b && b.name && !names.includes(b.name)) names.push(b.name);
+    }
+    return names;
+  }
 
   // src/lib/spine/resizeCore.ts
   function fitFactor(box, target) {
@@ -8397,6 +8406,9 @@ function initTreeUI() {
 function loadSkeletonForTree(jsonData, name) {
   skeletonData = jsonData;
   currentSkeletonName = name;
+  // Reset per-load state so re-parsing the same file does not duplicate bones.
+  boneChildrenMap = new Map();
+  selectedBones = new Set();
   
   if (!jsonData.bones || !Array.isArray(jsonData.bones)) {
     if (treePlaceholder) treePlaceholder.textContent = 'No bones found in skeleton';
@@ -8649,6 +8661,114 @@ window.boneHierarchy = boneHierarchy;
     revokeZip();
     line.textContent = `${files.length} files`;
     paint();
+    // Show the bone tree immediately so the user can pick which bones to scale.
+    refreshTreeFromFiles();
+  }
+
+  async function refreshTreeFromFiles() {
+    // Reset previous tree state so newly dropped files replace it.
+    skeletonData = null;
+    currentSkeletonName = null;
+    boneHierarchy = [];
+    boneChildrenMap = new Map();
+    selectedBones = new Set();
+    let loaded = 0;
+    for (const file of files) {
+      try {
+        const data = new Uint8Array(await file.arrayBuffer());
+        const name = file.name;
+        const lower = name.toLowerCase();
+        if (lower.endsWith(".json")) {
+          const value = parseJson(data, name);
+          if (value) loaded++;
+        } else if (lower.endsWith(".skel") || lower.endsWith(".skel.bytes") || lower.endsWith(".spine") || lower.endsWith(".bytes")) {
+          if (lower.endsWith(".spine") || lower.endsWith(".bytes")) {
+            const inflated = await inflateRaw2(data);
+            if (inflated) {
+              const names = extractSpineBones(inflated);
+              if (names.length) {
+                loadSpineBonesForTree(names, name);
+                loaded++;
+              }
+            }
+          } else {
+            const sk = readSkel(data);
+            if (sk && sk.bones && sk.bones.length) {
+              loadSkelForTree(sk, name);
+              loaded++;
+            }
+          }
+        }
+      } catch (e) {
+        // ignore per-file parse errors; other files still load
+      }
+    }
+    if (!loaded) {
+      // No skeleton parsed yet; keep the placeholder visible.
+      if (!treeContainer) initTreeUI();
+      updateBoneTree();
+    }
+  }
+
+  function loadSkelForTree(sk, name) {
+    // Reset per-load state so re-parsing the same file does not duplicate bones.
+    boneChildrenMap = new Map();
+    selectedBones = new Set();
+    // Build a JSON-like view of the skeleton so the existing tree UI can render it.
+    const bonesByName = new Map();
+    const parentIndex = new Map();
+    for (let i = 0; i < sk.bones.length; i++) {
+      const b = sk.bones[i];
+      bonesByName.set(b.name, b);
+      parentIndex.set(i, b.parent);
+    }
+    const roots = [];
+    for (let i = 0; i < sk.bones.length; i++) {
+      const p = sk.bones[i].parent;
+      if (p === null || p === undefined || !bonesByName.has(p)) roots.push(sk.bones[i].name);
+    }
+    skeletonData = { bones: sk.bones.map(b => ({ name: b.name, parent: b.parent === null || b.parent === undefined ? null : sk.bones[b.parent]?.name || null })) };
+    currentSkeletonName = name;
+    for (const b of sk.bones) {
+      if (b.parent != null && bonesByName.has(b.parent)) {
+        if (!boneChildrenMap.has(b.parent)) boneChildrenMap.set(b.parent, []);
+        boneChildrenMap.get(b.parent).push(b.name);
+      }
+    }
+    boneHierarchy = [];
+    function visit(boneName, depth) {
+      const bone = bonesByName.get(boneName);
+      if (!bone) return;
+      boneHierarchy.push({
+        name: boneName,
+        displayName: bone.name,
+        depth: depth,
+        hasChildren: boneChildrenMap.has(bone.name),
+        isControl: bone.name.includes('-control') || bone.icon === 'ik' || bone.name === 'root',
+        color: bone.color || '#ffffff'
+      });
+      const children = boneChildrenMap.get(bone.name) || [];
+      for (const child of children) visit(child, depth + 1);
+    }
+    for (const root of roots) visit(root, 0);
+    updateBoneTree();
+  }
+
+  function loadSpineBonesForTree(names, name) {
+    // Reset per-load state so re-parsing the same file does not duplicate bones.
+    boneChildrenMap = new Map();
+    selectedBones = new Set();
+    skeletonData = { bones: names.map(n => ({ name: n, parent: null })) };
+    currentSkeletonName = name;
+    boneHierarchy = names.map(n => ({
+      name: n,
+      displayName: n,
+      depth: 0,
+      hasChildren: false,
+      isControl: n.includes('-control') || n === 'root',
+      color: '#ffffff'
+    }));
+    updateBoneTree();
   }
   var dragDepth = 0;
   var ignoreClick = false;
