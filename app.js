@@ -9149,17 +9149,16 @@ window.boneHierarchy = boneHierarchy;
       try {
         const ok = await bridgeLoad();
         if (!ok) {
-          // Provide one-click installer links
+          // Auto-download the installer
           const installerLink = document.createElement('a');
           installerLink.href = 'spine-bridge/install_bridge.py';
           installerLink.download = 'install_bridge.py';
-          installerLink.textContent = '⚡ Run Auto-Installer (Python)';
-          installerLink.style.color = '#ff6b6b';
-          installerLink.style.textDecoration = 'underline';
-          installerLink.style.cursor = 'pointer';
-          installerLink.style.marginLeft = '8px';
-          installerLink.style.fontWeight = 'bold';
+          installerLink.style.display = 'none';
+          document.body.appendChild(installerLink);
+          installerLink.click();
+          document.body.removeChild(installerLink);
           
+          // Also show guide link as fallback
           const guideLink = document.createElement('a');
           guideLink.href = 'INSTALL_BRIDGE.md';
           guideLink.target = '_blank';
@@ -9170,27 +9169,25 @@ window.boneHierarchy = boneHierarchy;
           guideLink.style.marginLeft = '8px';
           
           line.textContent = '';
-          line.appendChild(document.createTextNode('Spine bridge not connected. '));
-          line.appendChild(installerLink);
-          line.appendChild(document.createTextNode(' '));
+          line.appendChild(document.createTextNode('Spine bridge not connected. Auto-downloading installer... '));
           line.appendChild(guideLink);
-          line.appendChild(document.createTextNode(' — one-time setup, then everything is fully automatic.'));
+          line.appendChild(document.createTextNode(' — run the downloaded install_bridge.py, then everything is fully automatic.'));
           
           withSpineBtn.disabled = false;
           return;
         }
         line.textContent = 'Loaded from Spine';
       } catch (e) {
+        // Auto-download the installer
         const installerLink = document.createElement('a');
         installerLink.href = 'spine-bridge/install_bridge.py';
         installerLink.download = 'install_bridge.py';
-        installerLink.textContent = '⚡ Run Auto-Installer (Python)';
-        installerLink.style.color = '#ff6b6b';
-        installerLink.style.textDecoration = 'underline';
-        installerLink.style.cursor = 'pointer';
-        installerLink.style.marginLeft = '8px';
-        installerLink.style.fontWeight = 'bold';
+        installerLink.style.display = 'none';
+        document.body.appendChild(installerLink);
+        installerLink.click();
+        document.body.removeChild(installerLink);
         
+        // Also show guide link as fallback
         const guideLink = document.createElement('a');
         guideLink.href = 'INSTALL_BRIDGE.md';
         guideLink.target = '_blank';
@@ -9201,11 +9198,9 @@ window.boneHierarchy = boneHierarchy;
         guideLink.style.marginLeft = '8px';
         
         line.textContent = '';
-        line.appendChild(document.createTextNode('Spine bridge error: ' + (e.message || e) + '. '));
-        line.appendChild(installerLink);
-        line.appendChild(document.createTextNode(' '));
+        line.appendChild(document.createTextNode('Spine bridge error: ' + (e.message || e) + '. Auto-downloading installer... '));
         line.appendChild(guideLink);
-        line.appendChild(document.createTextNode(' — one-time setup, then fully automatic.'));
+        line.appendChild(document.createTextNode(' — run the downloaded install_bridge.py, then fully automatic.'));
         
         withSpineBtn.disabled = false;
         return;
