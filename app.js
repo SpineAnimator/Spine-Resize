@@ -8023,7 +8023,7 @@
     // Determine which bones to scale
     const scaleAll = !bonesToScale || bonesToScale.size === 0;
     const shouldScale = new Set();
-    
+
     if (scaleAll) {
       // Scale all bones
       const dataBones = data.bones ?? [];
@@ -8031,12 +8031,26 @@
         shouldScale.add(b.name);
       }
     } else {
-      // Scale selected bones and their descendants
+      // Build a parent->children map from the JSON skeleton so we can walk descendants.
+      const kids = new Map();
+      for (const b of data.bones ?? []) {
+        if (!b.parent) continue;
+        const list = kids.get(b.parent) ?? [];
+        list.push(b.name);
+        kids.set(b.parent, list);
+      }
+      // Scale each selected bone and all of its descendants.
       for (const name of bonesToScale) {
         shouldScale.add(name);
-        // Add all children
-        const stack = [];
-        // We'll populate this during actual scaling
+        const stack = [name];
+        while (stack.length) {
+          const cur = stack.pop();
+          for (const child of kids.get(cur) ?? []) {
+            if (shouldScale.has(child)) continue;
+            shouldScale.add(child);
+            stack.push(child);
+          }
+        }
       }
     }
     const animNames = Object.keys(data.animations ?? {});
@@ -8052,8 +8066,10 @@
       root.x = num(root.x) + offsetX;
       root.y = num(root.y) + offsetY;
     }
+    const slotBone = new Map((data.slots ?? []).map((sl) => [sl.name, sl.bone || "root"]));
     eachAtt(data, function(_slot, att) {
-      if (!scaleAll && !shouldScale.has(_slot)) return;
+      const owner = slotBone.get(_slot) ?? _slot;
+      if (!scaleAll && !shouldScale.has(owner)) return;
       if (att.x != null) att.x *= s;
       if (att.y != null) att.y *= s;
       if (att.width != null) att.width *= s;
@@ -8073,7 +8089,8 @@
       if (att.lengths) for (let i = 0; i < att.lengths.length; i++) att.lengths[i] *= s;
     });
     for (const anim of Object.values(data.animations ?? {})) {
-      for (const tl of Object.values(anim.bones ?? {})) {
+      for (const [boneName, tl] of Object.entries(anim.bones ?? {})) {
+        if (!scaleAll && !shouldScale.has(boneName)) continue;
         for (const k of tl.translate ?? []) {
           if (k.x != null) k.x *= s;
           if (k.y != null) k.y *= s;
@@ -8101,28 +8118,78 @@
           }
         }
       }
-      scaleDeformTree(anim.deform, s);
-      for (const keys of Object.values(anim.ik ?? {})) {
-        if (!Array.isArray(keys)) continue;
-        for (const k of keys) {
-          if (typeof k.softness === "number") k.softness *= s;
-          scaleCurve(k.curve, 1, s);
+      if (!scaleAll) {
+        const deformSlotMap = new Map();
+        for (const [slotName, entries] of Object.entries(anim.deform ?? {})) {
+          const owner = slotBone.get(slotName) ?? slotName;
+          if (shouldScale.has(owner)) deformSlotMap.set(slotName, entries);
+        }
+        for (const [slotName, entries] of deformSlotMap) scaleDeformTree(entries, s);
+      } else {
+        scaleDeformTree(anim.deform, s);
+      }
+      if (!scaleAll) {
+        const ikMap = new Map((data.ik ?? []).map((c) => [c.name, c]));
+        for (const [ikName, keys] of Object.entries(anim.ik ?? {})) {
+          if (!Array.isArray(keys)) continue;
+          const c = ikMap.get(ikName);
+          const targetName = c?.target ?? ikName;
+          const targetBone = data.bones?.find((b) => b.name === targetName);
+          const targetOwner = targetBone ? (targetBone.parent || "root") : null;
+          if (!targetOwner || !shouldScale.has(targetOwner)) continue;
+          for (const k of keys) {
+            if (typeof k.softness === "number") k.softness *= s;
+            scaleCurve(k.curve, 1, s);
+          }
         }
       }
     }
-    scaleConstraintSetup(data, s);
+    if (scaleAll) scaleConstraintSetup(data, s);
+    else {
+      for (const c of data.constraints ?? []) {
+        const bones = c.bones ?? [];
+        if (!bones.some((bn) => shouldScale.has(bn))) continue;
+        if (typeof c.softness === "number") c.softness = c.softness * s;
+        if (c.type === "transform") scaleTransformBody(c, s);
+        else if (c.type === "physics") scalePhysicsBody(c, s);
+        else if (c.type === "slider") scaleSliderBody(c, s);
+        else if (c.type === "path" || c.type == null) {
+          const positionMode = c.positionMode;
+          const spacingMode = c.spacingMode;
+          if (typeof c.position === "number" && positionMode === "fixed") c.position = c.position * s;
+          if (typeof c.spacing === "number" && (spacingMode === "length" || spacingMode === "fixed" || spacingMode == null) && c.type === "path") {
+            c.spacing = c.spacing * s;
+          }
+        }
+      }
+      for (const c of data.ik ?? []) {
+        if (typeof c.softness === "number") c.softness *= s;
+      }
+      const legacy = data;
+      for (const c of legacy.physics ?? []) scalePhysicsBody(c, s);
+    }
     for (const c of data.transform ?? []) {
+      if (!scaleAll) {
+        const owner = c.bone ? (data.bones?.find((b) => b.name === c.bone)?.parent || "root") : null;
+        if (owner && !shouldScale.has(owner)) continue;
+      }
       if (c.x != null) c.x *= s;
       if (c.y != null) c.y *= s;
     }
     for (const c of data.path ?? []) {
+      if (!scaleAll) {
+        const owner = c.bone ? (data.bones?.find((b) => b.name === c.bone)?.parent || "root") : null;
+        if (owner && !shouldScale.has(owner)) continue;
+      }
       if (c.position != null && c.positionMode === "fixed") c.position *= s;
       if (c.spacing != null && (c.spacingMode === "length" || c.spacingMode === "fixed" || c.spacingMode == null)) c.spacing *= s;
     }
     const sk = data.skeleton;
     if (sk) {
-      for (const key of ["width", "height", "x", "y"]) {
-        if (typeof sk[key] === "number") sk[key] = sk[key] * s;
+      if (scaleAll) {
+        for (const key of ["width", "height", "x", "y"]) {
+          if (typeof sk[key] === "number") sk[key] = sk[key] * s;
+        }
       }
     }
     const now = data.animations ?? {};
