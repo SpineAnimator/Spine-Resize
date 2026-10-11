@@ -98,7 +98,7 @@ export async function zipEntries(entries: SpineEntry[]): Promise<Blob> {
   return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
 }
 
-function parseJson(data: Uint8Array): SpineJson | null {
+function parseJson(data: Uint8Array, entryPath: string): SpineJson | null {
   try {
     const value = JSON.parse(decodeText(data)) as SpineJson;
     if (!value || typeof value !== "object") return null;
@@ -106,6 +106,7 @@ function parseJson(data: Uint8Array): SpineJson | null {
     const hasAnims = !!value.animations && typeof value.animations === "object" && !Array.isArray(value.animations);
     if (!hasBones && !hasAnims) return null;
     if (!hasBones) value.bones = [];
+    loadSkeletonForTree(value, baseName(entryPath));
     return value;
   } catch {
     return null;
@@ -182,7 +183,7 @@ export async function resizeEntries(entries: SpineEntry[], opts: ResizeOptions) 
   for (const entry of entries) {
     const kind = kindOf(entry.path);
     if (kind === "json") {
-      const data = parseJson(entry.data);
+      const data = parseJson(entry.data, entry.path);
       if (!data) {
         rest.push(entry);
         continue;

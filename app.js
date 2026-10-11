@@ -8200,7 +8200,7 @@
     for (const entry of entries) zip.file(entry.path, entry.data);
     return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
   }
-  function parseJson(data) {
+  function parseJson(data, entryPath) {
     try {
       const value = JSON.parse(decodeText(data));
       if (!value || typeof value !== "object") return null;
@@ -8208,7 +8208,7 @@
       const hasAnims = !!value.animations && typeof value.animations === "object" && !Array.isArray(value.animations);
       if (!hasBones && !hasAnims) return null;
       if (!hasBones) value.bones = [];
-      loadSkeletonForTree(value, baseName(entry.path));
+      loadSkeletonForTree(value, baseName(entryPath));
       return value;
     } catch {
       return null;
@@ -8274,7 +8274,7 @@
     for (const entry of entries) {
       const kind2 = kindOf(entry.path);
       if (kind2 === "json") {
-        const data = parseJson(entry.data);
+        const data = parseJson(entry.data, entry.path);
         if (!data) {
           rest.push(entry);
           continue;
