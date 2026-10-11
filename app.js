@@ -3657,9 +3657,8 @@
     if (a.events instanceof Uint8Array) for (const b of a.events) w.u8(b);
     if (nonessential && a.color != null) w.i32(a.color);
   }
-  function scaleSkel(sk, factor, offsetX = 0, offsetY = 0) {
-    if (sk.bones[0]) {
-    }
+  function scaleSkel(sk, factor, offsetX = 0, offsetY = 0, bonesToScale) {
+    const scaleAll = !bonesToScale || bonesToScale.size === 0;
     const apply = (f) => {
       if (!f || f.k === 0) return;
       const v = new DataView(new ArrayBuffer(4));
@@ -3669,20 +3668,109 @@
       f.bits = v.getInt32(0);
       f.k = 0;
     };
-    const walk = (o) => {
-      if (!o || typeof o !== "object") return;
-      if (Array.isArray(o)) {
-        for (const x of o) walk(x);
-        return;
+    if (scaleAll) {
+      const walk = (o) => {
+        if (!o || typeof o !== "object") return;
+        if (Array.isArray(o)) {
+          for (const x of o) walk(x);
+          return;
+        }
+        const rec = o;
+        if (typeof rec.bits === "number" && (rec.k === 0 || rec.k === 1)) {
+          apply(rec);
+          return;
+        }
+        for (const k of Object.keys(rec)) walk(rec[k]);
+      };
+      walk(sk);
+    } else {
+      // Bone-selection aware scaling: only scale selected bones, their
+      // descendants, and the attachments/animations that belong to them.
+      const nameToIdx = new Map();
+      for (let i = 0; i < sk.bones.length; i++) nameToIdx.set(sk.bones[i].name, i);
+      const kids = Array.from({ length: sk.bones.length }, () => []);
+      for (let i = 0; i < sk.bones.length; i++) {
+        const p = sk.bones[i].parent;
+        if (p != null) kids[p].push(i);
       }
-      const rec = o;
-      if (typeof rec.bits === "number" && (rec.k === 0 || rec.k === 1)) {
-        apply(rec);
-        return;
+      const scaleIdx = new Set();
+      for (const name of bonesToScale) {
+        const idx = nameToIdx.get(name);
+        if (idx == null) continue;
+        scaleIdx.add(idx);
+        const stack = [idx];
+        while (stack.length) {
+          const cur = stack.pop();
+          for (const c of kids[cur]) {
+            if (scaleIdx.has(c)) continue;
+            scaleIdx.add(c);
+            stack.push(c);
+          }
+        }
       }
-      for (const k of Object.keys(rec)) walk(rec[k]);
-    };
-    walk(sk);
+      // Scale bone position/length fields
+      for (let i = 0; i < sk.bones.length; i++) {
+        if (!scaleIdx.has(i)) continue;
+        const b = sk.bones[i];
+        apply(b.x);
+        apply(b.y);
+        apply(b.length);
+      }
+      // Scale attachments
+      for (const skin of sk.skins) {
+        for (const sl of skin.slots) {
+          const raw = sk.slots[sl.slotIndex];
+          const slotBone = raw ? slotBoneIndex(raw) : -1;
+          const ownerOk = scaleIdx.has(slotBone);
+          for (const a of sl.atts) {
+            const att = a.att;
+            if (att.type === "region") {
+              if (ownerOk) {
+                apply(att.x); apply(att.y);
+                apply(att.width); apply(att.height);
+              }
+            } else if (att.type === "point") {
+              if (ownerOk) {
+                apply(att.x); apply(att.y);
+              }
+            } else if (att.type === "mesh" || att.type === "bbox" || att.type === "path" || att.type === "clip") {
+              if (att.weighted && att.bones) {
+                let bi = 0, vi = 0;
+                while (bi < att.bones.length) {
+                  const bc = att.bones[bi++];
+                  for (let k = 0; k < bc; k++) {
+                    const b = att.bones[bi++];
+                    if (scaleIdx.has(b)) {
+                      apply(att.verts[vi]);
+                      apply(att.verts[vi + 1]);
+                    }
+                    vi += 3;
+                  }
+                }
+              } else if (ownerOk) {
+                for (let v = 0; v + 1 < att.verts.length; v += 2) {
+                  apply(att.verts[v]);
+                  apply(att.verts[v + 1]);
+                }
+                if (att.type === "path") for (const len of att.lengths) apply(len);
+              }
+            }
+          }
+        }
+      }
+      // Scale animation timelines
+      for (const anim of sk.animations) {
+        for (const g of anim.bones) {
+          if (!scaleIdx.has(g.boneIndex)) continue;
+          for (const it of g.items) {
+            if (it.type === 1) scaleCurveValues(it.curves, factor, factor, "mul");
+            else if (it.type === 2) scaleCurveValues(it.curves, factor, 1, "mul");
+            else if (it.type === 3) scaleCurveValues(it.curves, 1, factor, "mul");
+            else if (it.type === 4) scaleCurveValues(it.curves, factor, factor, "div");
+          }
+        }
+      }
+    }
     if ((offsetX || offsetY) && sk.bones[0]) {
       const bx = new DataView(new ArrayBuffer(4));
       bx.setInt32(0, sk.bones[0].x.bits);
@@ -8392,12 +8480,12 @@
     const out = [];
     for (const job of jsons) {
       const off = opts.center ? centerOffset(job.box, factor) : { x: 0, y: 0 };
-      scaleJson(job.data, factor, off.x, off.y);
+      scaleJson(job.data, factor, off.x, off.y, opts.bonesToScale);
       out.push({ path: job.path, data: encodeText(JSON.stringify(job.data)) });
     }
     for (const job of skels) {
       const off = opts.center ? centerOffset(job.box, factor) : { x: 0, y: 0 };
-      scaleSkel(job.sk, factor, off.x, off.y);
+      scaleSkel(job.sk, factor, off.x, off.y, opts.bonesToScale);
       const bytes = writeSkel(job.sk, 1);
       readSkel(bytes);
       out.push({ path: job.path, data: bytes });
@@ -8445,6 +8533,7 @@
 let skeletonData = null;  // The loaded skeleton JSON
 let boneHierarchy = [];   // Flattened bone tree data
 let boneChildrenMap = new Map();  // bone -> [children]
+let collapsedBones = new Set(); // bones whose children are hidden
 let selectedBones = new Set();    // Currently selected bone names
 let currentSkeletonName = null;   // Name of the current skeleton
 
@@ -8514,6 +8603,7 @@ function loadSkeletonForTree(jsonData, name) {
     
     boneHierarchy.push({
       name: boneName,
+      parentBone: bone.parent || null,
       displayName: bone.name,
       depth: depth,
       hasChildren: boneChildrenMap.has(bone.name),
@@ -8573,39 +8663,126 @@ function updateBoneTree() {
     '<button id="clearSelBtn" class="chip" style="font-size:0.75rem;padding:4px 8px">Clear</button>' +
     '</div>';
   
-  // Add tree items
+  // Add tree items - proper nested collapsible tree
   const treeItems = document.createElement('div');
   treeItems.style.display = 'flex';
   treeItems.style.flexDirection = 'column';
-  treeItems.style.gap = '2px';
-  
-  for (const node of boneHierarchy) {
-    const indent = '  '.repeat(node.depth);
-    const item = document.createElement('div');
-    item.style.display = 'flex';
-    item.style.alignItems = 'center';
-    item.style.padding = '4px 8px';
-    item.style.borderRadius = '2px';
-    item.style.cursor = 'pointer';
-    item.style.userSelect = 'none';
-    
-    if (selectedBones.has(node.name)) {
-      item.style.backgroundColor = '#2a2742';
+  treeItems.style.gap = '1px';
+
+  // Build a nested tree structure from the flat hierarchy
+  function buildNestedTree() {
+    const nodes = new Map();
+    const roots = [];
+    for (const node of boneHierarchy) {
+      nodes.set(node.name, { ...node, children: [] });
     }
-    
-    item.innerHTML = '<input type="checkbox" class="bone-checkbox" data-bone="' + node.name + '" ' + (selectedBones.has(node.name) ? 'checked' : '') + ' style="margin-right:8px;width:16px;height:16px;" />' +
-      '<span>' + indent + node.displayName + '</span>';
-    
-    item.addEventListener('click', (e) => {
-      if (e.target.type === 'checkbox') return;
-      const checkbox = item.querySelector('.bone-checkbox');
-      checkbox.checked = !checkbox.checked;
-      toggleBoneSelection(checkbox.dataset.bone, checkbox.checked);
-    });
-    
-    treeItems.appendChild(item);
+    for (const node of boneHierarchy) {
+      const rec = nodes.get(node.name);
+      if (node.parentBone && nodes.has(node.parentBone)) {
+        nodes.get(node.parentBone).children.push(rec);
+      } else {
+        roots.push(rec);
+      }
+    }
+    return roots;
   }
-  
+
+  // Render a single tree node (collapsible)
+  function renderNode(rec, depth) {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.alignItems = 'center';
+    row.style.padding = '3px 4px';
+    row.style.borderRadius = '2px';
+    row.style.cursor = 'pointer';
+    row.style.userSelect = 'none';
+
+    const hasKids = rec.children.length > 0;
+    const isCollapsed = collapsedBones.has(rec.name);
+
+    // Toggle button (spacer if no children)
+    const toggle = document.createElement('span');
+    toggle.style.width = '14px';
+    toggle.style.textAlign = 'center';
+    toggle.style.fontSize = '0.7rem';
+    toggle.style.color = '#555';
+    toggle.style.cursor = hasKids ? 'pointer' : 'default';
+    toggle.textContent = hasKids ? (isCollapsed ? '▶' : '▼') : '•';
+    toggle.title = hasKids ? (isCollapsed ? 'Expand' : 'Collapse') : '';
+
+    // Indent spacer
+    const indent = document.createElement('span');
+    indent.style.width = (depth * 16) + 'px';
+    indent.style.flexShrink = '0';
+
+    const st = selectionState(rec.name);
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'bone-checkbox';
+    cb.dataset.bone = rec.name;
+    cb.checked = st === 'full';
+    cb.indeterminate = st === 'partial';
+    cb.style.marginRight = '6px';
+    cb.style.width = '15px';
+    cb.style.height = '15px';
+    cb.style.cursor = 'pointer';
+    cb.style.accentColor = '#8a1c1c';
+
+    const label = document.createElement('span');
+    label.style.fontSize = '0.85rem';
+    label.style.color = st === 'full' ? '#e8c0a0' : (st === 'partial' ? '#ffd27a' : '#c8c8d0');
+    label.textContent = rec.displayName;
+
+    row.appendChild(toggle);
+    row.appendChild(indent);
+    row.appendChild(cb);
+    row.appendChild(label);
+
+    if (st === 'full') {
+      row.style.backgroundColor = 'rgba(138,28,28,0.15)';
+    } else if (st === 'partial') {
+      row.style.backgroundColor = 'rgba(255,210,122,0.08)';
+    }
+
+    // Click on row (not checkbox) toggles collapse
+    row.addEventListener('click', (e) => {
+      if (e.target === cb) return;
+      if (hasKids) {
+        if (collapsedBones.has(rec.name)) collapsedBones.delete(rec.name);
+        else collapsedBones.add(rec.name);
+        renderAll();
+      } else {
+        cb.checked = !cb.checked;
+        toggleBoneSelection(rec.name, cb.checked);
+      }
+    });
+
+    cb.addEventListener('change', () => {
+      toggleBoneSelection(rec.name, cb.checked);
+    });
+
+    // Children container
+    const kidsEl = document.createElement('div');
+    kidsEl.style.display = isCollapsed ? 'none' : 'block';
+    if (hasKids) {
+      for (const child of rec.children) {
+        kidsEl.appendChild(renderNode(child, depth + 1));
+      }
+    }
+
+    if (hasKids) row.appendChild(kidsEl);
+    return row;
+  }
+
+  function renderAll() {
+    treeItems.innerHTML = '';
+    const roots = buildNestedTree();
+    for (const rec of roots) {
+      treeItems.appendChild(renderNode(rec, 0));
+    }
+  }
+
+  renderAll();
   treeWrapper.appendChild(header);
   treeWrapper.appendChild(treeItems);
   boneListContainer.appendChild(treeWrapper);
@@ -8616,11 +8793,11 @@ function updateBoneTree() {
   
   if (selectAllBtn) {
     selectAllBtn.addEventListener('click', () => {
+      collapsedBones.clear();
       for (const node of boneHierarchy) {
-        if (!node.isControl) {
-          toggleBoneSelection(node.name, true);
-        }
+        toggleBoneSelection(node.name, true);
       }
+      renderAll();
     });
   }
   
@@ -8630,6 +8807,21 @@ function updateBoneTree() {
       updateBoneTree();
     });
   }
+}
+
+// Compute the selection state of a bone: 'full', 'partial', or 'none'
+function selectionState(boneName) {
+  const me = selectedBones.has(boneName);
+  const kids = boneChildrenMap.get(boneName) || [];
+  let anyKid = false, allKid = true;
+  for (const k of kids) {
+    const st = selectionState(k);
+    if (st !== 'none') anyKid = true;
+    if (st !== 'full') allKid = false;
+  }
+  if (me) return 'full';
+  if (anyKid) return 'partial';
+  return 'none';
 }
 
 // Toggle bone selection (and descendants)
@@ -8770,11 +8962,11 @@ window.boneHierarchy = boneHierarchy;
         // ignore per-file parse errors; other files still load
       }
     }
-    if (!loaded) {
-      // No skeleton parsed yet; keep the placeholder visible.
-      if (!treeContainer) initTreeUI();
-      updateBoneTree();
-    }
+    // Always ensure the tree UI is initialized and refreshed after processing files.
+    // This guarantees the bone tree is visible immediately after a file is dropped,
+    // before the user clicks Resize.
+    if (!treeContainer) initTreeUI();
+    updateBoneTree();
   }
 
   function loadSkelForTree(sk, name) {
@@ -8811,6 +9003,7 @@ window.boneHierarchy = boneHierarchy;
         displayName: bone.name,
         depth: depth,
         hasChildren: boneChildrenMap.has(bone.name),
+        parentBone: bone.parent || null,
         isControl: bone.name.includes('-control') || bone.icon === 'ik' || bone.name === 'root',
         color: bone.color || '#ffffff'
       });
@@ -8898,7 +9091,10 @@ window.boneHierarchy = boneHierarchy;
   let bridgeIsSpine = false;
 
   async function bridgeLoad() {
-    if (typeof window.spineBridge === 'undefined' || !window.spineBridge) return false;
+    if (typeof window.spineBridge === 'undefined' || !window.spineBridge) {
+      line.textContent = 'Spine bridge not found. Install the Spine Resize Bridge extension and restart Spine.';
+      return false;
+    }
     try {
       const info = await window.spineBridge.getOpenSpineFile();
       if (!info || !info.data || !info.data.length) return false;
@@ -8931,68 +9127,35 @@ window.boneHierarchy = boneHierarchy;
   }
 
   async function bridgeFallbackAuto() {
-    // Pick the files currently open in Spine editor via File System Access API.
-    if (!('showOpenFilePicker' in window)) {
-      bridgeFallbackPicker();
-      return;
-    }
-    try {
-      const handles = await window.showOpenFilePicker({
-        types: [{
-          description: 'Spine files',
-          accept: {
-            'application/json': ['.json'],
-            'application/octet-stream': ['.skel', '.bytes', '.spine'],
-            'image/png': ['.png'],
-            'image/jpeg': ['.jpg', '.jpeg'],
-            'image/webp': ['.webp'],
-            'text/plain': ['.atlas']
-          }
-        }],
-        multiple: true,
-        excludeAcceptAllOption: false
-      });
-      const outFiles = [];
-      for (const handle of handles) {
-        const file = await handle.getFile();
-        file.fileHandle = handle;
-        outFiles.push(file);
-      }
-      if (outFiles.length) {
-        add(outFiles);
-        go.disabled = false;
-        go.classList.remove('btn');
-        go.classList.add('btn', 'white');
-        const ws = document.getElementById('with_spine');
-        if (ws) ws.remove();
-      }
-    } catch (err) {
-      if (err.name !== 'AbortError') bridgeFallbackPicker();
-    }
+    // No browser fallback. The "with Spine" button only loads files from the
+    // running Spine editor via the native bridge. If the bridge is missing we
+    // report the problem instead of silently opening a file picker.
+    return false;
   }
 
   function bridgeFallbackPicker() {
-    const finput = document.createElement('input');
-    finput.type = 'file';
-    finput.multiple = true;
-    finput.accept = '.json,.skel,.spine,.bytes,.atlas,.png,.jpg,.jpeg,.webp';
-    finput.onchange = function(e) {
-      const newFiles = Array.from(e.target.files);
-      add(newFiles);
-      go.disabled = false;
-      go.classList.remove('btn');
-      go.classList.add('btn', 'white');
-      const ws = document.getElementById('with_spine');
-      if (ws) ws.remove();
-    };
-    finput.click();
+    // Intentionally empty - we never open a browser file picker from this button.
+    return false;
   }
 
   const withSpineBtn = document.getElementById('with_spine');
   if (withSpineBtn) {
     withSpineBtn.addEventListener('click', async function() {
-      const ok = await bridgeLoad();
-      if (!ok) await bridgeFallbackAuto();
+      withSpineBtn.disabled = true;
+      try {
+        const ok = await bridgeLoad();
+        if (!ok) {
+          line.textContent = 'Spine bridge not found. Install the Spine Resize Bridge extension and restart Spine.';
+          withSpineBtn.disabled = false;
+          return;
+        }
+        line.textContent = 'Loaded from Spine';
+      } catch (e) {
+        line.textContent = 'Spine bridge error: ' + (e.message || e);
+        withSpineBtn.disabled = false;
+        return;
+      }
+      withSpineBtn.remove();
     });
   }
 
