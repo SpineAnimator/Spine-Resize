@@ -1,0 +1,61 @@
+name: Publish Spine Mask + Resize Chrome Bridge installer
+on:
+  push:
+    branches: [main]
+    paths:
+      - spine-bridge/manifest.json
+      - spine-bridge/background.js
+      - spine-bridge/mask-content.js
+      - spine-bridge/spinemaskbridge.py
+      - spine-bridge/install_spinemask_host.py
+      - spine-bridge/content.js
+      - spine-bridge/popup.html
+      - spine-bridge/popup.js
+      - .github/workflows/build-mask-bridge.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build exact audited extension package without user images
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/spine-mask-resize-bridge
+          for asset in manifest.json background.js mask-content.js content.js \
+            popup.html popup.js icon_16.png icon_48.png icon_128.png \
+            spinemaskbridge.py install_spinemask_host.py; do
+            test -s "spine-bridge/$asset"
+            cp "spine-bridge/$asset" "dist/spine-mask-resize-bridge/$asset"
+          done
+          node --check "dist/spine-mask-resize-bridge/background.js"
+          node --check "dist/spine-mask-resize-bridge/mask-content.js"
+          python3 -m py_compile "dist/spine-mask-resize-bridge/spinemaskbridge.py"
+          cd dist
+          zip -q -X -r Spine-Mask-Resize-Bridge.zip spine-mask-resize-bridge
+          unzip -t Spine-Mask-Resize-Bridge.zip >/dev/null
+          test "$(unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -E '\.(png|jpg|jpeg|psd|spine)$' | grep -v 'icon_' | wc -l)" -eq 0
+          sha256sum Spine-Mask-Resize-Bridge.zip
+          echo 'SPINE_MASK_EXTENSION_RELEASE_PACKAGE_PASS'
+      - name: Publish reviewed bridge package as a GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="spine-mask-bridge-v1"
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title 'Spine Mask + Resize Native Chrome Bridge' \
+              --notes 'Chrome MV3 extension, local editor native host and privacy-preserving automatic roundtrip. No user images or projects.' \
+              --target main
+          fi
+          gh release upload "$TAG" "dist/Spine-Mask-Resize-Bridge.zip" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          echo "SPINE_MASK_EXTENSION_RELEASE_PASS https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
