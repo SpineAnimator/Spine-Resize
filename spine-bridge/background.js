@@ -39,6 +39,7 @@ async function callNative(method, params) {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg?.type === "MASK_NATIVE") return false;
   (async () => {
     try {
       let result;
