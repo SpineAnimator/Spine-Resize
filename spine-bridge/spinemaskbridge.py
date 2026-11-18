@@ -139,7 +139,7 @@ def spine_open_path():
     if platform.system() == "Darwin":
         try:
             pids = subprocess.run(
-                ["pgrep", "-f", "^/Applications/Spine\\.app/Contents/MacOS/Spine( |$)"],
+                ["pgrep", "-f", "^/Applications/Spine\.app/Contents/MacOS/Spine( |$)"],
                 capture_output=True, text=True, timeout=3
             ).stdout.split()
             launched = set()
@@ -157,7 +157,7 @@ def spine_open_path():
                 # in an OS path and are not shell-escaped by ps.
                 if tail.startswith("--update "):
                     version, separator, tail = tail[len("--update "):].partition(" ")
-                    if not separator or not re.fullmatch(r"4\\.3\\.\\d+", version):
+                    if not separator or not re.fullmatch(r"4\.3\.\d+", version):
                         continue
                     tail = tail.strip()
                 if not tail.startswith("/") or not tail.lower().endswith(".spine"):
