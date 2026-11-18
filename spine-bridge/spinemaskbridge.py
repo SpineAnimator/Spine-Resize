@@ -139,7 +139,7 @@ def spine_open_path():
     if platform.system() == "Darwin":
         try:
             pids = subprocess.run(
-                ["pgrep", "-f", "^/Applications/Spine\.app/Contents/MacOS/Spine( |$)"],
+                ["pgrep", "-f", r"^/Applications/Spine\.app/Contents/MacOS/Spine( |$)"],
                 capture_output=True, text=True, timeout=3
             ).stdout.split()
             launched = set()
