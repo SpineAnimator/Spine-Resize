@@ -1,0 +1,45 @@
+name: Spine Mask bridge | native messaging and privacy regression
+on:
+  push:
+    branches: [main]
+    paths:
+      - spine-bridge/spinemaskbridge.py
+      - spine-bridge/install_spinemask_host.py
+      - spine-bridge/background.js
+      - spine-bridge/mask-content.js
+      - spine-bridge/manifest.json
+      - spine-bridge/test_spinemaskbridge.py
+      - spine-bridge/test_mask_extension.mjs
+      - .github/workflows/mask-native-bridge.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  bridge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Chrome MV3 extension and native host
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile spine-bridge/spinemaskbridge.py spine-bridge/install_spinemask_host.py
+          node --check spine-bridge/background.js
+          node --check spine-bridge/mask-content.js
+          python3 spine-bridge/test_spinemaskbridge.py
+          node spine-bridge/test_mask_extension.mjs
+      - name: Ensure native host and extension cannot read arbitrary project paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -n 'allowed_origins.*\*' spine-bridge/install_spinemask_host.py
+          ! grep -n 'MASK_NATIVE.*READ_FILE' spine-bridge/background.js
+          test -s spine-bridge/spinemaskbridge.py
+          test -s spine-bridge/mask-content.js
+          echo 'SPINE_MASK_BRIDGE_SECURITY_GATE_PASS'
