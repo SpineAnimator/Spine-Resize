@@ -2,7 +2,7 @@
 // Isolated-world bridge: page <-> extension messages with request-id correlation.
 (()=>{
   if(location.origin!=="https://spineanimator.github.io"||
-     location.pathname!=="/Spine-Mask-Tool/")return;
+     !["/Spine-Mask-Tool/","/Spine-Mask-Tool/index.html"].includes(location.pathname))return;
   const ALLOWED=new Set(["ping","open_project","read_chunk","begin_result","write_chunk","commit_result"]);
   const CHANNEL="spine-mask-native-v1";
   window.addEventListener("message",event=>{
