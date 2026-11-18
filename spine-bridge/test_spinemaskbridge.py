@@ -192,9 +192,9 @@ class NativeBridgeTests(unittest.TestCase):
                     "/Applications/Spine.app/Contents/MacOS/Spine")
                 return subprocess.CompletedProcess(args, 0, text + "\\n", "")
             raise AssertionError("unexpected system query")
-        with patch.object(host.platform, "system", return_value="Darwin"), \\
-             patch.object(host.shutil, "which", return_value=None), \\
-             patch.object(host.subprocess, "run", side_effect=fake_run):
+        with (patch.object(host.platform, "system", return_value="Darwin"),
+              patch.object(host.shutil, "which", return_value=None),
+              patch.object(host.subprocess, "run", side_effect=fake_run)):
             path, method = host.spine_open_path()
         self.assertEqual(path, example.resolve())
         self.assertEqual(method, "editor_launch_argument")
@@ -214,9 +214,9 @@ class NativeBridgeTests(unittest.TestCase):
                     " --output /tmp/any --export /tmp/profile.export.json")
                 return subprocess.CompletedProcess(args, 0, command + "\\n", "")
             raise AssertionError("unexpected system query")
-        with patch.object(host.platform, "system", return_value="Darwin"), \\
-             patch.object(host.shutil, "which", return_value=None), \\
-             patch.object(host.subprocess, "run", side_effect=fake_run):
+        with (patch.object(host.platform, "system", return_value="Darwin"),
+              patch.object(host.shutil, "which", return_value=None),
+              patch.object(host.subprocess, "run", side_effect=fake_run)):
             path, method = host.spine_open_path()
         self.assertIsNone(path)
         self.assertEqual(method, "choose_project_required")
