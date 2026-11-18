@@ -51,59 +51,71 @@ def find_extension_ids(data):
     return ids
 
 
-def install(ids):
-    data = chrome_data()
+def install(ids, data=None):
+    data = data or chrome_data()
     system = platform.system()
-    if system == "Darwin":
-        folder = data / "NativeMessagingHosts"
-    elif system == "Windows":
-        folder = data / "NativeMessagingHosts"
-    else:
-        folder = data / "NativeMessagingHosts"
+    folder = data / "NativeMessagingHosts"
     folder.mkdir(parents=True, exist_ok=True)
-    host = (Path(__file__).resolve().parent / "spinemaskbridge.py")
-    if not host.is_file():
-        raise FileNotFoundError("Native host missing beside installer")
-    if system != "Windows":
-        host.chmod(host.stat().st_mode | stat.S_IXUSR)
-        executable = host
+    source = Path(__file__).resolve().parent
+    if system == "Darwin":
+        runtime_dir = Path.home() / "Library/Application Support/SpineMaskBridge"
+    elif system == "Windows":
+        runtime_dir = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData/Local")) / "SpineMaskBridge"
     else:
-        # Chrome Native Messaging on Windows requires an executable. A .py
-        # script cannot be used directly as the manifest host path.
-        # An explicit .cmd bootstrap is supported by Chrome on most systems,
-        # but Chrome's native pipe protocol is safest with a .exe wrapper.
-        executable = host.with_suffix(".exe")
-        if not executable.is_file():
-            raise RuntimeError("Windows requires packaged spinemaskbridge.exe native host")
+        runtime_dir = Path.home() / ".local/share/spinemaskbridge"
+    runtime_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if system == "Windows":
+        original = source / "spinemaskbridge.exe"
+        if not original.is_file():
+            raise RuntimeError("Windows host executable is missing: use the packaged Windows ZIP")
+    else:
+        original = source / "spinemaskbridge.py"
+        if not original.is_file():
+            raise FileNotFoundError("Native host missing beside installer")
+    # Install an independent copy. Moving or cleaning a downloaded ZIP must
+    # not silently break the registered browser host.
+    host = runtime_dir / original.name
+    temporary = runtime_dir / (original.name + ".tmp")
+    shutil.copy2(original, temporary)
+    if system != "Windows":
+        temporary.chmod(0o700)
+    os.replace(temporary, host)
     payload = {
         "name": NAME,
-        "description": "Spine Mask Tool - verified open-project bridge",
-        "path": str(executable),
+        "description": "Spine Mask Tool - verified local editor bridge",
+        "path": str(host),
         "type": "stdio",
-        "allowed_origins": [f"chrome-extension://{identifier}/" for identifier in sorted(ids)]
+        "allowed_origins": [
+            f"chrome-extension://{identifier}/" for identifier in sorted(ids)
+        ],
     }
-    file = folder / (NAME + ".json")
-    tmp = file.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(payload,indent=2)+"\n",encoding="utf-8")
-    os.replace(tmp,file)
+    destination = folder / (NAME + ".json")
+    tmp = destination.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, destination)
     if system == "Windows":
         import winreg
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER,
             r"Software\Google\Chrome\NativeMessagingHosts\spinemaskbridge") as key:
-            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, str(file))
-    print("Native host registered:",file)
-    print("Authorized Chrome extension IDs:",", ".join(sorted(ids)))
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, str(destination))
+    print("Spine Mask Native Messaging host registered:", destination)
+    print("Local host installed:", host)
+    print("Authorized extension IDs:", ", ".join(sorted(ids)))
+    return destination
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--extension-id",action="append",default=[])
+    parser.add_argument("--extension-id", action="append", default=[])
+    parser.add_argument("--chrome-data", type=Path, default=None,
+                        help="Chrome data directory for isolated bridge testing")
     args = parser.parse_args()
-    ids = set(args.extension_id) | find_extension_ids(chrome_data())
+    directory = args.chrome_data or chrome_data()
+    ids = set(args.extension_id) | find_extension_ids(directory)
     ids = {x for x in ids if len(x)==32 and all("a"<=c<="p" for c in x)}
     if not ids:
         raise SystemExit("Chrome Spine Resize Bridge extension not found in local Chrome profiles. Install/activate the extension first.")
-    install(ids)
+    install(ids, directory)
 
 
 if __name__=="__main__":
