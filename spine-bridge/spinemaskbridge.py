@@ -130,54 +130,111 @@ def spine_open_path():
                 return None, "ambiguous_editor_handles"
         except (OSError, subprocess.TimeoutExpired):
             pass
-    roots = [Path.home() / n for n in ("Documents", "Desktop", "Downloads")]
-    matches = []
-    for root in roots:
-        if not root.is_dir():
-            continue
-        for directory, subs, files in os.walk(root):
-            depth = len(Path(directory).relative_to(root).parts)
-            if depth >= 2:
-                subs[:] = []
-            subs[:] = [d for d in subs if not d.startswith(".") and d != "node_modules"]
-            for f in files:
-                item = Path(directory) / f
-                if item.suffix.lower() not in KINDS:
-                    continue
-                try:
-                    if time.time() - item.stat().st_mtime < 120:
-                        matches.append(item.resolve())
-                except OSError:
-                    continue
-    if len(matches) == 1:
-        return matches[0], "recent_project"
-    return None, "ambiguous_open_project" if matches else "no_open_project"
+    # No directory heuristics: importing a recently touched but unrelated
+    # project would be unsafe. Require a document handle or an OS file picker.
+    return None, "choose_project_required"
 
 
 def export_json(project, folder):
+    """Export a native Spine project using an actual .export.json profile."""
     if project.suffix.lower() == ".json":
         return project
+    if project.suffix.lower() != ".spine":
+        raise ValueError("BINARY_SKEL_REQUIRES_SPINE_PROJECT_OR_EXPORTED_JSON")
     cli = editor_cli()
     if not cli:
-        raise ValueError("LICENSED_SPINE_CLI_UNAVAILABLE: no installed editor to export binary project")
+        raise ValueError("LICENSED_SPINE_CLI_UNAVAILABLE: no installed editor for native export")
     folder.mkdir(parents=True, exist_ok=True)
-    # No arbitrary remote command can be passed into this fixed argument list.
-    result = subprocess.run([cli, "--update", "4.3.26", "--input", str(project),
-                             "--output", str(folder), "--export", "json"],
-                            capture_output=True, text=True, timeout=150)
+    # Keep the export profile outside the output folder so it cannot be
+    # mistaken for a generated skeleton JSON.
+    profile_dir = folder / "_config"
+    profile_dir.mkdir(mode=0o700)
+    profile = profile_dir / "spinemask.export.json"
+    settings = {
+        "class": "export-json",
+        "extension": ".json",
+        "format": "JSON",
+        "prettyPrint": False,
+        "nonessential": True,
+        "cleanUp": False,
+        "packAtlas": None,
+        "packSource": "attachments",
+        "packTarget": "single",
+        "warnings": True,
+        "version": None,
+        "all": True,
+        "output": str(folder),
+        "id": -1,
+        "input": "",
+        "open": False,
+    }
+    profile.write_text(json.dumps(settings), encoding="utf-8")
+    command = [cli, "--update", "4.3.26", "--input", str(project),
+               "--output", str(folder), "--export", str(profile)]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=150)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError("LICENSED_SPINE_EXPORT_TIMEOUT_OR_LAUNCH_FAILED") from exc
     if result.returncode:
+        # Do not disclose user's license data or absolute paths from CLI logs.
         raise ValueError("LICENSED_SPINE_EXPORT_FAILED")
-    files = list(folder.glob("*.json"))
+    files = [item for item in folder.glob("*.json") if item != profile]
     if len(files) != 1:
         raise ValueError("LICENSED_SPINE_EXPORT_AMBIGUOUS")
+    try:
+        exported = json.loads(files[0].read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("LICENSED_SPINE_EXPORTED_JSON_INVALID") from exc
+    if not exported.get("skins") or not isinstance(exported.get("slots"), list):
+        raise ValueError("LICENSED_SPINE_EXPORTED_JSON_INVALID")
+    if not str(exported.get("skeleton", {}).get("spine", "")).startswith("4.3."):
+        raise ValueError("LICENSED_SPINE_EXPORTED_VERSION_MISMATCH")
     return files[0]
 
 
+def pick_native_project():
+    """Ask the OS for a local file; never accept arbitrary paths from web JS."""
+    system = platform.system()
+    if system == "Darwin":
+        script = ('POSIX path of (choose file with prompt "Choose the Spine project to mask" '
+                  'of type {"spine", "json", "skel"})')
+        cmd = ["osascript", "-e", script]
+    elif system == "Windows":
+        script = (
+            'Add-Type -AssemblyName System.Windows.Forms; '
+            '$dialog=New-Object System.Windows.Forms.OpenFileDialog; '
+            '$dialog.Filter="Spine Project (*.spine;*.json;*.skel)|*.spine;*.json;*.skel"; '
+            'if($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK)'
+            '{$dialog.FileName}'
+        )
+        cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script]
+    else:
+        raise ValueError("NATIVE_PICKER_UNSUPPORTED_ON_THIS_OS")
+    try:
+        chosen = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ValueError("NATIVE_PROJECT_PICKER_FAILED") from exc
+    if chosen.returncode or not chosen.stdout.strip():
+        raise ValueError("NATIVE_PROJECT_PICKER_CANCELLED_OR_UNAVAILABLE")
+    path = Path(chosen.stdout.strip()).expanduser()
+    if path.suffix.lower() not in KINDS or not path.is_file():
+        raise ValueError("SELECTED_FILE_IS_NOT_A_SPINE_PROJECT")
+    return path.resolve()
+
+
+def choose_project(_params):
+    return _load_project(pick_native_project(), "user_picker")
+
+
 def open_project(_params):
-    global session, stage
     path, method = spine_open_path()
     if not path:
         return {"connected": True, "open": False, "reason": method}
+    return _load_project(path, method)
+
+
+def _load_project(path, method):
+    global session, stage
     if path.stat().st_size > MAX_PROJECT:
         raise ValueError("PROJECT_TOO_LARGE")
     staging = Path(tempfile.mkdtemp(prefix="spinemask-export-"))
@@ -454,6 +511,7 @@ def commit_result(payload):
 HANDLERS = {
     "ping": lambda _: {"connected": True, "protocol": "spinemask/1"},
     "open_project": open_project,
+    "choose_project": choose_project,
     "read_chunk": read_chunk,
     "begin_result": begin_result,
     "write_chunk": write_chunk,
