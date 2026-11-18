@@ -106,7 +106,31 @@ def spine_open_path():
         running = False
     if not running:
         return None, "editor_not_detected"
-    roots = [Path.home() / n for n in ("Documents", "Desktop")]
+    # On macOS/Linux an editor may keep its project file descriptor open.
+    # Prefer that explicit process handle over guessing by file modification.
+    if platform.system() != "Windows" and shutil.which("lsof"):
+        try:
+            pids = subprocess.run(["pgrep", "-f", "(Spine.app|Spine.sh|Spine.exe)"],
+                                  capture_output=True, text=True, timeout=3).stdout.split()
+            active = set()
+            for pid in pids[:8]:
+                if not pid.isdigit():
+                    continue
+                handles = subprocess.run(["lsof", "-Fn", "-p", pid], capture_output=True,
+                                         text=True, timeout=3)
+                for row in handles.stdout.splitlines():
+                    if not row.startswith("n/"):
+                        continue
+                    candidate = Path(row[1:])
+                    if candidate.suffix.lower() in KINDS and candidate.is_file():
+                        active.add(candidate.resolve())
+            if len(active) == 1:
+                return active.pop(), "editor_handle"
+            if len(active) > 1:
+                return None, "ambiguous_editor_handles"
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    roots = [Path.home() / n for n in ("Documents", "Desktop", "Downloads")]
     matches = []
     for root in roots:
         if not root.is_dir():
