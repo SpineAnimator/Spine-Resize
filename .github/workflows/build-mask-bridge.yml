@@ -68,7 +68,7 @@ jobs:
           mkdir -p dist/spine-mask-resize-bridge
           for asset in manifest.json background.js mask-content.js content.js \
             popup.html popup.js icon_16.png icon_48.png icon_128.png \
-            spinemaskbridge.py install_spinemask_host.py; do
+            spinemaskbridge.py install_spinemask_host.py launch_spinemask_mac.py; do
             test -s "spine-bridge/$asset"
             cp "spine-bridge/$asset" "dist/spine-mask-resize-bridge/$asset"
           done
@@ -79,7 +79,7 @@ jobs:
           node --check dist/spine-mask-resize-bridge/mask-content.js
           python3 - <<'PY'
           from pathlib import Path
-          for name in ('spinemaskbridge.py','install_spinemask_host.py'):
+          for name in ('spinemaskbridge.py','install_spinemask_host.py','launch_spinemask_mac.py'):
               p=Path('dist/spine-mask-resize-bridge')/name
               compile(p.read_bytes(),str(p),'exec')
           PY
@@ -90,6 +90,7 @@ jobs:
           unzip -t Spine-Mask-Resize-Bridge.zip >/dev/null
           test "$(unzip -Z1 Spine-Mask-Resize-Bridge.zip | awk '/\.(png|jpg|jpeg|psd|spine)$/ && !/icon_/ {n++} END{print n+0}')" -eq 0
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq spinemaskbridge.exe
+          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq launch_spinemask_mac.py
           sha256sum Spine-Mask-Resize-Bridge.zip
           echo 'SPINE_MASK_MAC_WINDOWS_PACKAGE_PASS'
       - name: Publish verified extension and native hosts in existing Release
