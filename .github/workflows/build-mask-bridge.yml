@@ -3,27 +3,65 @@ on:
   push:
     branches: [main]
     paths:
-      - spine-bridge/manifest.json
-      - spine-bridge/background.js
-      - spine-bridge/mask-content.js
-      - spine-bridge/spinemaskbridge.py
-      - spine-bridge/install_spinemask_host.py
-      - spine-bridge/content.js
-      - spine-bridge/popup.html
-      - spine-bridge/popup.js
+      - spine-bridge/**
       - .github/workflows/build-mask-bridge.yml
   workflow_dispatch:
 permissions:
   contents: write
 jobs:
-  publish:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+  windows-host:
+    runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Build exact audited extension package without user images
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build native Windows executable from the audited host
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller==6.16.0
+          python -m PyInstaller --noconfirm --clean --onefile --console --name spinemaskbridge spine-bridge/spinemaskbridge.py
+          if (-not (Test-Path "dist/spinemaskbridge.exe")) { throw "Windows host missing" }
+      - name: Verify Windows Native Messaging stdio ping
+        shell: pwsh
+        run: |
+          @'
+          import json, struct, subprocess
+          msg=json.dumps({"id":1,"method":"ping","params":{}}).encode()
+          frame=struct.pack("<I",len(msg))+msg
+          p=subprocess.run(["dist/spinemaskbridge.exe"],input=frame,
+                           capture_output=True,timeout=25)
+          assert p.returncode==0, f"host exited {p.returncode}"
+          assert len(p.stdout)>=4,"no native response"
+          count=struct.unpack("<I",p.stdout[:4])[0]
+          result=json.loads(p.stdout[4:4+count])
+          assert result["result"]["protocol"]=="spinemask/1",result
+          print("SPINE_MASK_WINDOWS_NATIVE_PING_PASS")
+          '@ | Set-Content -Path validate_host.py -Encoding utf8
+          python validate_host.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spinemaskbridge-windows
+          path: dist/spinemaskbridge.exe
+          if-no-files-found: error
+          retention-days: 5
+
+  publish:
+    needs: [windows-host]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: spinemaskbridge-windows
+          path: windows-host
+      - name: Build release with both macOS native host and Windows executable
         shell: bash
         run: |
           set -euo pipefail
@@ -34,16 +72,27 @@ jobs:
             test -s "spine-bridge/$asset"
             cp "spine-bridge/$asset" "dist/spine-mask-resize-bridge/$asset"
           done
-          node --check "dist/spine-mask-resize-bridge/background.js"
-          node --check "dist/spine-mask-resize-bridge/mask-content.js"
-          python3 -m py_compile "dist/spine-mask-resize-bridge/spinemaskbridge.py"
+          test -s windows-host/spinemaskbridge.exe
+          cp windows-host/spinemaskbridge.exe dist/spine-mask-resize-bridge/
+          chmod 755 dist/spine-mask-resize-bridge/spinemaskbridge.py
+          node --check dist/spine-mask-resize-bridge/background.js
+          node --check dist/spine-mask-resize-bridge/mask-content.js
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ('spinemaskbridge.py','install_spinemask_host.py'):
+              p=Path('dist/spine-mask-resize-bridge')/name
+              compile(p.read_bytes(),str(p),'exec')
+          PY
+          python3 spine-bridge/test_spinemaskbridge.py
+          node spine-bridge/test_mask_extension.mjs
           cd dist
           zip -q -X -r Spine-Mask-Resize-Bridge.zip spine-mask-resize-bridge
           unzip -t Spine-Mask-Resize-Bridge.zip >/dev/null
-          test "$(unzip -Z1 Spine-Mask-Resize-Bridge.zip | awk '/\\.(png|jpg|jpeg|psd|spine)$/ && !/icon_/ {n++} END{print n+0}')" -eq 0
+          test "$(unzip -Z1 Spine-Mask-Resize-Bridge.zip | awk '/\.(png|jpg|jpeg|psd|spine)$/ && !/icon_/ {n++} END{print n+0}')" -eq 0
+          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq spinemaskbridge.exe
           sha256sum Spine-Mask-Resize-Bridge.zip
-          echo 'SPINE_MASK_EXTENSION_RELEASE_PACKAGE_PASS'
-      - name: Publish reviewed bridge package as a GitHub Release
+          echo 'SPINE_MASK_MAC_WINDOWS_PACKAGE_PASS'
+      - name: Publish verified extension and native hosts in existing Release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -53,9 +102,9 @@ jobs:
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
               --title 'Spine Mask + Resize Native Chrome Bridge' \
-              --notes 'Chrome MV3 extension, local editor native host and privacy-preserving automatic roundtrip. No user images or projects.' \
+              --notes 'Chrome MV3 extension, native host for macOS and Windows, local-only project import.' \
               --target main
           fi
           gh release upload "$TAG" "dist/Spine-Mask-Resize-Bridge.zip" \
             --repo "$GITHUB_REPOSITORY" --clobber
-          echo "SPINE_MASK_EXTENSION_RELEASE_PASS https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          echo "SPINE_MASK_RELEASE_PASS https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
