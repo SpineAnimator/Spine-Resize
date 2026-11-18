@@ -137,6 +137,38 @@ class NativeBridgeTests(unittest.TestCase):
             host.begin_result({"session":opened["session"],"files":[
                 {"name":"mask.json","size":90},{"name":"mask-overlay.png","size":70}]})
 
+    def test_editor_open_is_verified_not_assumed(self):
+        # A submitted open command alone is not proof of a loaded project.
+        with patch.object(host.platform,"system",return_value="Darwin"):
+            with patch.object(host,"recent_editor_project",return_value=self.project), \
+                 patch.object(host.subprocess,"run") as proc:
+                opened,route=host.verified_open_in_spine(self.project)
+                self.assertTrue(opened)
+                self.assertEqual(route,"already_open")
+                proc.assert_not_called()
+
+            def fake_run(argv,**kwargs):
+                from subprocess import CompletedProcess
+                if argv[0]=="pgrep":
+                    return CompletedProcess(argv,0,stdout="99800\\n",stderr="")
+                return CompletedProcess(argv,0,stdout="",stderr="")
+
+            with patch.object(host,"recent_editor_project",return_value=None), \
+                 patch.object(host,"wait_for_editor_open",side_effect=[False,True]) as wait, \
+                 patch.object(host.subprocess,"run",side_effect=fake_run) as calls:
+                opened,route=host.verified_open_in_spine(self.project)
+                self.assertTrue(opened)
+                self.assertEqual(route,"new_instance_verified")
+                self.assertTrue(any("open"==c.args[0][0] and "-n" in c.args[0] for c in calls.call_args_list))
+                self.assertEqual(wait.call_count,2)
+
+            with patch.object(host,"recent_editor_project",return_value=None), \
+                 patch.object(host,"wait_for_editor_open",side_effect=[False,False]), \
+                 patch.object(host.subprocess,"run",side_effect=fake_run):
+                opened,route=host.verified_open_in_spine(self.project)
+                self.assertFalse(opened)
+                self.assertEqual(route,"editor_loading_not_confirmed")
+
     def test_no_unbounded_discovery(self):
         host.session=None
         with patch.object(host,"spine_open_path",return_value=(None,"ambiguous_open_project")):
