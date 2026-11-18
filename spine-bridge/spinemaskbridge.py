@@ -172,7 +172,7 @@ def open_project(_params):
                         continue
                     if attachment.get("type", "region") != "region":
                         continue
-                    referenced = str(attachment.get("path") or name).replace("\\\\", "/")
+                    referenced = str(attachment.get("path") or name).replace("\\", "/")
                     wanted.add(Path(referenced).stem.casefold())
         if not wanted:
             raise ValueError("NO_REGION_ATTACHMENTS_IN_OPEN_PROJECT")
