@@ -3,7 +3,7 @@
 (()=>{
   if(location.origin!=="https://spineanimator.github.io"||
      !["/Spine-Mask-Tool/","/Spine-Mask-Tool/index.html"].includes(location.pathname))return;
-  const ALLOWED=new Set(["ping","open_project","choose_project","read_chunk","begin_result","write_chunk","commit_result"]);
+  const ALLOWED=new Set(["ping","open_project","choose_project","begin_import","import_chunk","finish_import","read_import_chunk","read_chunk","begin_result","write_chunk","commit_result"]);
   const CHANNEL="spine-mask-native-v1";
   window.addEventListener("message",event=>{
     if(event.source!==window||event.origin!==location.origin)return;
