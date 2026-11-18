@@ -195,10 +195,21 @@ class NativeBridgeTests(unittest.TestCase):
             raise AssertionError("unexpected system query")
         with (patch.object(host.platform, "system", return_value="Darwin"),
               patch.object(host.shutil, "which", return_value=None),
-              patch.object(host.subprocess, "run", side_effect=fake_run)):
+              patch.object(host.subprocess, "run", side_effect=fake_run),
+              patch.object(host, "recent_editor_project", return_value=example.resolve())):
             path, method = host.spine_open_path()
         self.assertEqual(path, example.resolve())
         self.assertEqual(method, "editor_launch_argument")
+
+        other = self.root / "Different open project.spine"
+        other.write_bytes(b"unrelated project")
+        with (patch.object(host.platform, "system", return_value="Darwin"),
+              patch.object(host.shutil, "which", return_value=None),
+              patch.object(host.subprocess, "run", side_effect=fake_run),
+              patch.object(host, "recent_editor_project", return_value=other.resolve())):
+            path, method = host.spine_open_path()
+        self.assertIsNone(path)
+        self.assertEqual(method, "editor_project_changed_choose_file")
 
     def test_macos_never_selects_batch_import_or_export(self):
         self.mock.stop()  # Test the real detector, not setUp's import fixture
