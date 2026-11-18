@@ -35,13 +35,10 @@ def build_json():
 
 def clip_json():
     j=build_json()
-    j["slots"] += [{"name":"auto_mask_original","bone":"root","attachment":"clip"},
-                   {"name":"auto_mask_overlay_original","bone":"root","attachment":"auto_mask_overlay"}]
+    j["slots"].insert(0, {"name":"auto_mask_original","bone":"root","attachment":"clip"})
     a=j["skins"][0]["attachments"]
-    a["auto_mask_original"]={"clip":{"type":"clipping","end":"auto_mask_overlay_original",
+    a["auto_mask_original"]={"clip":{"type":"clipping","end":"original",
                                      "vertexCount":4,"vertices":[-5,-5,5,-5,5,5,-5,5]}}
-    a["auto_mask_overlay_original"]={
-        "auto_mask_overlay":{"type":"region","path":"mask-overlay","width":12,"height":12}}
     return j
 
 
@@ -55,6 +52,9 @@ class NativeBridgeTests(unittest.TestCase):
         images=self.root/"images"
         images.mkdir()
         (images/"face.png").write_bytes(PNG)
+        (images/"hotspot.png").write_bytes(PNG + b"unbound-artist-effect")
+        (images/"nested").mkdir()
+        (images/"nested"/"future-glow.webp").write_bytes(PNG + b"another-unbound-effect")
         host.session=host.stage=None
         self.mock=patch.object(host,"spine_open_path",return_value=(self.project,"editor"))
         self.mock.start()
@@ -78,6 +78,8 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertTrue(opened["open"])
         self.assertEqual(opened["sourceType"],".json")
         self.assertTrue({"skeleton.json","images/face.png"} <= {x["key"] for x in opened["files"]})
+        self.assertFalse(any("hotspot" in x["key"] for x in opened["files"]),
+                         "Unbound NDA images must never be sent through Chrome")
         files={}
         for item in opened["files"]:
             offset=0;parts=[]
@@ -92,10 +94,9 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertEqual(files["images/face.png"],PNG)
         output=json.dumps(clip_json()).encode()
         staged=host.begin_result({"session":opened["session"],"files":[
-            {"name":"mask.json","size":len(output)},
-            {"name":"mask-overlay.png","size":len(PNG)}
+            {"name":"mask.json","size":len(output)}
         ]})
-        for name,bytes_data in (("mask.json",output),("mask-overlay.png",PNG)):
+        for name,bytes_data in (("mask.json",output),):
             offset=0
             for i in range(0,len(bytes_data),1024):
                 block=bytes_data[i:i+1024]
@@ -110,10 +111,16 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertFalse(done["imported"])
         self.assertEqual(self.project.read_bytes(),original,"source was overwritten")
         folder=Path(done["location"])
-        self.assertTrue((folder/"images"/"mask-overlay.png").is_file())
+        self.assertFalse((folder/"images"/"mask-overlay.png").exists())
         self.assertTrue((folder/"images"/"face.png").is_file())
+        self.assertEqual((folder/"images"/"hotspot.png").read_bytes(),
+                         (self.root/"images"/"hotspot.png").read_bytes())
+        self.assertEqual((folder/"images"/"nested"/"future-glow.webp").read_bytes(),
+                         (self.root/"images"/"nested"/"future-glow.webp").read_bytes())
         exported=json.loads((folder/"scene-mask.json").read_text())
-        self.assertEqual(len(exported["slots"]),3)
+        self.assertEqual(len(exported["slots"]),2)
+        self.assertEqual(exported["slots"][1]["name"],"original")
+        self.assertEqual(exported["skins"][0]["attachments"]["auto_mask_original"]["clip"]["end"],"original")
         self.assertIn("idle",exported["animations"])
 
     def test_reject_arbitrary_disk_read_and_corrupted_write(self):
