@@ -187,11 +187,11 @@ class NativeBridgeTests(unittest.TestCase):
             if args[0] == "osascript":
                 return subprocess.CompletedProcess(args, 1, "", "not authorized")
             if args[0] == "pgrep":
-                return subprocess.CompletedProcess(args, 0, "321\\n99800\\n", "")
+                return subprocess.CompletedProcess(args, 0, "321\n99800\n", "")
             if args[0] == "ps":
                 text = command if args[2] == "321" else (
                     "/Applications/Spine.app/Contents/MacOS/Spine")
-                return subprocess.CompletedProcess(args, 0, text + "\\n", "")
+                return subprocess.CompletedProcess(args, 0, text + "\n", "")
             raise AssertionError("unexpected system query")
         with (patch.object(host.platform, "system", return_value="Darwin"),
               patch.object(host.shutil, "which", return_value=None),
@@ -208,13 +208,13 @@ class NativeBridgeTests(unittest.TestCase):
             if args[0] == "osascript":
                 return subprocess.CompletedProcess(args, 1, "", "not authorized")
             if args[0] == "pgrep":
-                return subprocess.CompletedProcess(args, 0, "321\\n", "")
+                return subprocess.CompletedProcess(args, 0, "321\n", "")
             if args[0] == "ps":
                 command = (
                     "/Applications/Spine.app/Contents/MacOS/Spine "
                     "--update 4.3.26 --input " + str(example) +
                     " --output /tmp/any --export /tmp/profile.export.json")
-                return subprocess.CompletedProcess(args, 0, command + "\\n", "")
+                return subprocess.CompletedProcess(args, 0, command + "\n", "")
             raise AssertionError("unexpected system query")
         with (patch.object(host.platform, "system", return_value="Darwin"),
               patch.object(host.shutil, "which", return_value=None),
