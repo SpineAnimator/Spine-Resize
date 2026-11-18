@@ -28,6 +28,7 @@ KINDS = {".json", ".spine", ".skel"}
 IMAGES = {".png", ".jpg", ".jpeg", ".webp"}
 session = None
 stage = None
+binary_import = None
 
 
 def recv():
@@ -508,10 +509,95 @@ def commit_result(payload):
         stage = None
 
 
+def begin_import(payload):
+    """Only a user-provided .spine File: no arbitrary paths or executable input."""
+    global binary_import
+    name, size, digest = payload.get("name"), payload.get("size"), payload.get("sha256")
+    if (not isinstance(name, str) or Path(name).name != name
+            or Path(name).suffix.lower() != ".spine"
+            or not isinstance(size, int) or not 0 < size <= MAX_PROJECT
+            or not isinstance(digest, str) or len(digest) != 64
+            or any(ch not in "0123456789abcdef" for ch in digest.lower())):
+        raise ValueError("INVALID_EXPLICIT_SPINE_IMPORT")
+    if binary_import:
+        shutil.rmtree(binary_import["temp"], ignore_errors=True)
+    directory = Path(tempfile.mkdtemp(prefix="spinemask-import-"))
+    source = directory / "source.spine"
+    source.touch(mode=0o600)
+    binary_import = {
+        "id": uuid.uuid4().hex, "temp": directory, "file": source,
+        "size": size, "sha256": digest.lower(), "written": 0,
+        "created": time.time(), "exported": None
+    }
+    return {"session": binary_import["id"], "maxChunk": CHUNK}
+
+
+def checked_import(payload):
+    active = binary_import
+    if not active or active["id"] != payload.get("session"):
+        raise ValueError("UNKNOWN_SPINE_IMPORT_SESSION")
+    if time.time() - active["created"] > 600:
+        raise ValueError("SPINE_IMPORT_SESSION_EXPIRED")
+    return active
+
+
+def import_chunk(payload):
+    active = checked_import(payload)
+    offset = payload.get("offset")
+    if active["exported"] or not isinstance(offset, int) or offset != active["written"]:
+        raise ValueError("INVALID_SPINE_IMPORT_OFFSET")
+    raw = base64.b64decode(payload.get("base64", ""), validate=True)
+    if not raw or len(raw) > CHUNK or offset + len(raw) > active["size"]:
+        raise ValueError("INVALID_SPINE_IMPORT_CHUNK")
+    with active["file"].open("ab") as dest:
+        dest.write(raw)
+    active["written"] += len(raw)
+    return {"written": active["written"]}
+
+
+def finish_import(payload):
+    active = checked_import(payload)
+    if active["written"] != active["size"]:
+        raise ValueError("SPINE_IMPORT_BYTES_INCOMPLETE")
+    if hashlib.sha256(active["file"].read_bytes()).hexdigest() != active["sha256"]:
+        raise ValueError("SPINE_IMPORT_SHA256_MISMATCH")
+    exported = export_json(active["file"], active["temp"] / "export")
+    if exported.stat().st_size > MAX_PROJECT:
+        raise ValueError("SPINE_EXPORTED_JSON_TOO_LARGE")
+    active["exported"] = exported
+    return {"session": active["id"], "name": exported.name, "size": exported.stat().st_size}
+
+
+def read_import_chunk(payload):
+    global binary_import
+    active = checked_import(payload)
+    source = active.get("exported")
+    if not source or not source.is_file():
+        raise ValueError("SPINE_IMPORT_NOT_YET_EXPORTED")
+    offset = payload.get("offset")
+    if not isinstance(offset, int) or offset < 0 or offset >= source.stat().st_size:
+        raise ValueError("INVALID_EXPORTED_SPINE_OFFSET")
+    with source.open("rb") as handle:
+        handle.seek(offset)
+        raw = handle.read(CHUNK)
+    done = offset + len(raw) >= source.stat().st_size
+    packet = {"session": active["id"], "offset": offset,
+              "total": source.stat().st_size,
+              "base64": base64.b64encode(raw).decode("ascii"), "done": done}
+    if done:
+        shutil.rmtree(active["temp"], ignore_errors=True)
+        binary_import = None
+    return packet
+
+
 HANDLERS = {
     "ping": lambda _: {"connected": True, "protocol": "spinemask/1"},
     "open_project": open_project,
     "choose_project": choose_project,
+    "begin_import": begin_import,
+    "import_chunk": import_chunk,
+    "finish_import": finish_import,
+    "read_import_chunk": read_import_chunk,
     "read_chunk": read_chunk,
     "begin_result": begin_result,
     "write_chunk": write_chunk,
