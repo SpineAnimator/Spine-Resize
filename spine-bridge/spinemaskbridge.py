@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import struct
 import subprocess
@@ -423,6 +424,93 @@ def copy_local_project_assets(project, dest):
     return count
 
 
+def recent_editor_project():
+    """The actual path Spine has recorded after loading a project (macOS).
+
+    The Spine 4.3 recent-file list uses its own settings syntax rather than
+    strict JSON. Reading only its first projectFile entry avoids selecting
+    unrelated desktop or recent files. No paths are sent to a website.
+    """
+    settings = Path.home() / "Library/Application Support/Spine/settings/recent-1.json"
+    try:
+        content = settings.read_text(encoding="utf-8")
+        section = content.split("recentFiles:", 1)[1]
+        section = section.split("projectFile:", 1)[1][:20000]
+        match = re.search(
+            r'paths\s*:\s*\[\s*\{\s*path\s*:\s*"((?:\\.|[^"\\])*)"',
+            section
+        )
+        if not match:
+            return None
+        path = Path(json.loads('"' + match.group(1) + '"')).expanduser()
+        return path.resolve() if path.is_file() else None
+    except (OSError, ValueError, IndexError, json.JSONDecodeError):
+        return None
+
+
+def wait_for_editor_open(project, seconds=12):
+    project = Path(project).resolve()
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if recent_editor_project() == project:
+            return True
+        time.sleep(0.4)
+    return False
+
+
+def verified_open_in_spine(project, editor_cli_path=None):
+    """Return (verified_opened, route) rather than assuming Popen means success.
+
+    The existing editor is tried first. On macOS the application may silently
+    ignore an Apple open-file event, so create exactly one independent editor
+    instance with the officially supported CLI project argument as a fallback.
+    The source instance is never closed or modified.
+    """
+    project = Path(project).resolve()
+    if platform.system() != "Darwin":
+        try:
+            if platform.system() == "Windows":
+                os.startfile(str(project))
+            else:
+                subprocess.Popen([editor_cli_path or "Spine", str(project)],
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            return False, "open_requested_not_verified"
+        except (OSError, AttributeError):
+            return False, "editor_open_failed"
+    if recent_editor_project() == project:
+        return True, "already_open"
+    try:
+        existing = subprocess.run(
+            ["open", "-a", "/Applications/Spine.app", str(project)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        if existing.returncode == 0 and wait_for_editor_open(project, seconds=8):
+            return True, "existing_instance"
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    # Avoid accumulating runaway GUI processes on machines with several
+    # different Spine installations / many already-open Editor windows.
+    try:
+        instances = subprocess.run(
+            ["pgrep", "-f", "^/Applications/Spine.app/Contents/MacOS/Spine"],
+            capture_output=True, text=True, timeout=4)
+        if len([pid for pid in instances.stdout.splitlines() if pid.isdigit()]) >= 3:
+            return False, "multiple_editors_manual_selection_required"
+    except (OSError, subprocess.TimeoutExpired):
+        return False, "editor_instance_count_unavailable"
+    try:
+        fresh = subprocess.run(
+            ["open", "-n", "-a", "/Applications/Spine.app", "--args",
+             "--update", "4.3.26", str(project)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+        if fresh.returncode != 0:
+            return False, "editor_launch_failed"
+        if wait_for_editor_open(project, seconds=25):
+            return True, "new_instance_verified"
+        return False, "editor_loading_not_confirmed"
+    except (OSError, subprocess.TimeoutExpired):
+        return False, "editor_launch_failed"
+
+
 def commit_result(payload):
     global stage
     active = checked_session(payload)
@@ -488,19 +576,11 @@ def commit_result(payload):
             except (subprocess.TimeoutExpired, OSError):
                 imported = False
         opened = False
+        open_route = "not_requested"
         if imported and payload.get("openEditor", True):
-            try:
-                if platform.system() == "Darwin":
-                    subprocess.Popen(["open", "-a", "Spine", str(output)],
-                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                elif platform.system() == "Windows":
-                    os.startfile(str(output))
-                else:
-                    subprocess.Popen([cli, str(output)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                opened = True
-            except (OSError, AttributeError):
-                opened = False
+            opened, open_route = verified_open_in_spine(output, cli)
         return {"saved": True, "imported": imported, "opened": opened,
+                "openVerification": open_route,
                 "project": output.name if imported else None,
                 "json": json_out.name, "location": str(folder),
                 "note": "Original project remains untouched"}
