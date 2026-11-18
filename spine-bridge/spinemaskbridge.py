@@ -132,8 +132,49 @@ def spine_open_path():
                 return None, "ambiguous_editor_handles"
         except (OSError, subprocess.TimeoutExpired):
             pass
-    # No directory heuristics: importing a recently touched but unrelated
-    # project would be unsafe. Require a document handle or an OS file picker.
+    # macOS Spine can be launched with a specific .spine path even when its
+    # AppleScript dictionary/Automation permission is unavailable. Only use a
+    # unique live editor launch argument; never scan Documents/Downloads and
+    # never claim this identifies a later manually switched document.
+    if platform.system() == "Darwin":
+        try:
+            pids = subprocess.run(
+                ["pgrep", "-f", "^/Applications/Spine\\.app/Contents/MacOS/Spine( |$)"],
+                capture_output=True, text=True, timeout=3
+            ).stdout.split()
+            launched = set()
+            for pid in pids[:16]:
+                if not pid.isdigit():
+                    continue
+                result = subprocess.run(["ps", "-p", pid, "-o", "command="],
+                    capture_output=True, text=True, timeout=3)
+                command = result.stdout.strip()
+                prefix = "/Applications/Spine.app/Contents/MacOS/Spine"
+                if not command.startswith(prefix):
+                    continue
+                tail = command[len(prefix):].strip()
+                # Exclude CLI jobs; arguments after --update can contain spaces
+                # in an OS path and are not shell-escaped by ps.
+                if tail.startswith("--update "):
+                    version, separator, tail = tail[len("--update "):].partition(" ")
+                    if not separator or not re.fullmatch(r"4\\.3\\.\\d+", version):
+                        continue
+                    tail = tail.strip()
+                if not tail.startswith("/") or not tail.lower().endswith(".spine"):
+                    continue
+                if any(option in tail for option in
+                       (" --input ", " --output ", " --export ", " --import ")):
+                    continue
+                candidate = Path(tail)
+                if candidate.is_file() and candidate.stat().st_size <= MAX_PROJECT:
+                    launched.add(candidate.resolve())
+            if len(launched) == 1:
+                return launched.pop(), "editor_launch_argument"
+            if len(launched) > 1:
+                return None, "multiple_editor_launch_projects"
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            pass
+    # Fail closed rather than guessing a project by mtime or another app.
     return None, "choose_project_required"
 
 
