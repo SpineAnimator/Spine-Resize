@@ -12,9 +12,10 @@
     if(typeof m.id!=="string"||!/^[-a-zA-Z0-9_]{1,90}$/.test(m.id))return;
     chrome.runtime.sendMessage({type:"MASK_NATIVE",action:m.method,params:m.params||{}},answer=>{
       const error=chrome.runtime.lastError?.message;
+      const ok=!error&&answer?.ok===true;
       window.postMessage({channel:CHANNEL,type:"response",id:m.id,
-        ok:!error&&answer?.ok===true,result:answer?.result,
-        error:error||answer?.error||"Spine Mask bridge not connected"},location.origin);
+        ok,result:answer?.result,
+        error:ok?null:(error||answer?.error||"Spine Mask bridge not connected")},location.origin);
     });
   });
   window.postMessage({channel:CHANNEL,type:"ready",version:1},location.origin);
