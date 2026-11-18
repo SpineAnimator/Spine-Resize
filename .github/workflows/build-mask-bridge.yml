@@ -40,7 +40,7 @@ jobs:
           cd dist
           zip -q -X -r Spine-Mask-Resize-Bridge.zip spine-mask-resize-bridge
           unzip -t Spine-Mask-Resize-Bridge.zip >/dev/null
-          test "$(unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -E '\.(png|jpg|jpeg|psd|spine)$' | grep -v 'icon_' | wc -l)" -eq 0
+          test "$(unzip -Z1 Spine-Mask-Resize-Bridge.zip | awk '/\\.(png|jpg|jpeg|psd|spine)$/ && !/icon_/ {n++} END{print n+0}')" -eq 0
           sha256sum Spine-Mask-Resize-Bridge.zip
           echo 'SPINE_MASK_EXTENSION_RELEASE_PACKAGE_PASS'
       - name: Publish reviewed bridge package as a GitHub Release
