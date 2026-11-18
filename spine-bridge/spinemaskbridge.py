@@ -169,7 +169,15 @@ def spine_open_path():
                 if candidate.is_file() and candidate.stat().st_size <= MAX_PROJECT:
                     launched.add(candidate.resolve())
             if len(launched) == 1:
-                return launched.pop(), "editor_launch_argument"
+                candidate = launched.pop()
+                # A live launcher argument may become stale when a user opens
+                # another project inside an already running editor. Cross-check
+                # Spine's recorded most recent project; disagreeing sources
+                # must never silently import a different artist's project.
+                recent = recent_editor_project()
+                if recent is not None and recent != candidate:
+                    return None, "editor_project_changed_choose_file"
+                return candidate, "editor_launch_argument"
             if len(launched) > 1:
                 return None, "multiple_editor_launch_projects"
         except (OSError, subprocess.TimeoutExpired, ValueError):
