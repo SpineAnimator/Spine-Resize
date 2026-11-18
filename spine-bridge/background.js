@@ -75,7 +75,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // Separate locked-down Spine Mask host, never the legacy arbitrary file bridge.
 const MASK_ROOT="https://spineanimator.github.io/Spine-Mask-Tool/";
-const MASK_METHODS=new Set(["ping","open_project","choose_project","read_chunk","begin_result","write_chunk","commit_result"]);
+const MASK_METHODS=new Set(["ping","open_project","choose_project","begin_import","import_chunk","finish_import","read_import_chunk","read_chunk","begin_result","write_chunk","commit_result"]);
 let maskPort=null, maskNextId=1;
 const maskPending=new Map();
 function ensureMaskPort(){
@@ -102,7 +102,7 @@ function maskCall(method,params){
   return new Promise((resolve,reject)=>{
     const timer=setTimeout(()=>{
       maskPending.delete(id);reject(new Error("Spine Mask native host timeout"));
-    },method==="commit_result"||method==="open_project"?210000:25000);
+    },method==="commit_result"||method==="open_project"||method==="choose_project"||method==="finish_import"?210000:25000);
     maskPending.set(id,{timer,resolve,reject});
     try{port.postMessage({id,method,params:params||{}});}
     catch(error){clearTimeout(timer);maskPending.delete(id);reject(error);}
