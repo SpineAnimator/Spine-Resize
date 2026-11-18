@@ -330,6 +330,41 @@ def write_chunk(payload):
     return {"name": name, "written": stage["written"][name]}
 
 
+def copy_local_project_assets(project, dest):
+    """Keep unreferenced animator images locally, not on the website."""
+    source = project.parent / "images"
+    if not source.exists():
+        return 0
+    if source.is_symlink() or not source.is_dir():
+        raise ValueError("UNSAFE_PROJECT_IMAGE_DIRECTORY")
+    root = source.resolve()
+    total = 0
+    count = 0
+    for folder, dirs, files in os.walk(source, followlinks=False):
+        directory = Path(folder)
+        dirs[:] = sorted(d for d in dirs if not (directory / d).is_symlink()
+                         and not d.startswith("."))
+        for name in sorted(files):
+            item = directory / name
+            if item.suffix.lower() not in IMAGES or item.is_symlink() or not item.is_file():
+                continue
+            real = item.resolve()
+            if not real.is_relative_to(root):
+                raise ValueError("UNSAFE_PROJECT_IMAGE_PATH")
+            relative = item.relative_to(source)
+            length = item.stat().st_size
+            count += 1
+            total += length
+            if count > 4000 or total > 2 * 1024 * 1024 * 1024:
+                raise ValueError("PROJECT_IMAGE_RESOURCE_LIMIT")
+            target = dest / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, target)
+            if target.stat().st_size != length:
+                raise ValueError("INCOMPLETE_PROJECT_ASSET_COPY")
+    return count
+
+
 def commit_result(payload):
     global stage
     active = checked_session(payload)
@@ -370,12 +405,17 @@ def commit_result(payload):
     dest = folder / "images"
     dest.mkdir(mode=0o700)
     try:
+        # Copy the entire original LOCAL images tree. The browser receives
+        # only skeleton-referenced images, but result assets must include
+        # future animation effects such as hotspot.png.
+        retained = copy_local_project_assets(active["source"], dest)
         for key, source in active["files"].items():
             if key.startswith("images/"):
                 relative = Path(key).relative_to("images")
                 target = dest / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, target)
+                if not target.exists():
+                    shutil.copy2(source, target)
         json_out = folder / (active["source"].stem + "-mask.json")
         json_out.write_text(json.dumps(updated, separators=(",", ":")), encoding="utf-8")
         cli = editor_cli()
