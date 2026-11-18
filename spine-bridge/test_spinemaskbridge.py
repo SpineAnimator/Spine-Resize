@@ -176,6 +176,51 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertFalse(result["open"])
         self.assertEqual(result["reason"],"ambiguous_open_project")
 
+    def test_macos_live_editor_launch_argv_without_apple_events(self):
+        """Unique explicit live launch project is safe; no mtime guessing."""
+        example = self.root / "Source Scene.spine"
+        example.write_bytes(b"project file for launch-argument test")
+        command = ("/Applications/Spine.app/Contents/MacOS/Spine "
+                   "--update 4.3.26 " + str(example))
+        def fake_run(args, **kwargs):
+            if args[0] == "osascript":
+                return subprocess.CompletedProcess(args, 1, "", "not authorized")
+            if args[0] == "pgrep":
+                return subprocess.CompletedProcess(args, 0, "321\\n99800\\n", "")
+            if args[0] == "ps":
+                text = command if args[2] == "321" else (
+                    "/Applications/Spine.app/Contents/MacOS/Spine")
+                return subprocess.CompletedProcess(args, 0, text + "\\n", "")
+            raise AssertionError("unexpected system query")
+        with patch.object(host.platform, "system", return_value="Darwin"), \\
+             patch.object(host.shutil, "which", return_value=None), \\
+             patch.object(host.subprocess, "run", side_effect=fake_run):
+            path, method = host.spine_open_path()
+        self.assertEqual(path, example.resolve())
+        self.assertEqual(method, "editor_launch_argument")
+
+    def test_macos_never_selects_batch_import_or_export(self):
+        example = self.root / "Source Scene.spine"
+        example.write_bytes(b"project file")
+        def fake_run(args, **kwargs):
+            if args[0] == "osascript":
+                return subprocess.CompletedProcess(args, 1, "", "not authorized")
+            if args[0] == "pgrep":
+                return subprocess.CompletedProcess(args, 0, "321\\n", "")
+            if args[0] == "ps":
+                command = (
+                    "/Applications/Spine.app/Contents/MacOS/Spine "
+                    "--update 4.3.26 --input " + str(example) +
+                    " --output /tmp/any --export /tmp/profile.export.json")
+                return subprocess.CompletedProcess(args, 0, command + "\\n", "")
+            raise AssertionError("unexpected system query")
+        with patch.object(host.platform, "system", return_value="Darwin"), \\
+             patch.object(host.shutil, "which", return_value=None), \\
+             patch.object(host.subprocess, "run", side_effect=fake_run):
+            path, method = host.spine_open_path()
+        self.assertIsNone(path)
+        self.assertEqual(method, "choose_project_required")
+
 
 if __name__=="__main__":
     unittest.main(verbosity=2)
