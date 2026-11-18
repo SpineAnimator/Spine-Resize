@@ -297,9 +297,9 @@ def begin_result(payload):
     if hashlib.sha256(active["source"].read_bytes()).hexdigest() != active["sha256"]:
         raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
     entries = payload.get("files")
-    if not isinstance(entries, list) or len(entries) != 2:
-        raise ValueError("EXPECTED_MASK_JSON_AND_PNG")
-    expected_names = {"mask.json", "mask-overlay.png"}
+    if not isinstance(entries, list) or len(entries) != 1:
+        raise ValueError("EXPECTED_ONLY_MASK_JSON")
+    expected_names = {"mask.json"}
     if {e.get("name") for e in entries} != expected_names:
         raise ValueError("INVALID_OUTPUT_ENTRY_NAMES")
     if any(not isinstance(e.get("size"), int) or e["size"] < 30 or e["size"] > MAX_OUTPUT for e in entries):
@@ -345,11 +345,22 @@ def commit_result(payload):
     for skin in skins:
         for names in skin.get("attachments", {}).values():
             clips += [a for a in names.values() if a.get("type") == "clipping"]
-    if not clips:
-        raise ValueError("MISSING_CLIPPING_ATTACHMENT")
-    with (stage["temp"] / "mask-overlay.png").open("rb") as f:
-        if f.read(8) != bytes.fromhex("89504e470d0a1a0a"):
-            raise ValueError("INVALID_MASK_TEXTURE")
+    if len(clips) != 1:
+        raise ValueError("EXPECTED_EXACTLY_ONE_CLIPPING_ATTACHMENT")
+    clip = clips[0]
+    names = [slot.get("name") for slot in updated["slots"]]
+    if (not clip.get("end") in names or
+            any(name.startswith("auto_mask_overlay") for name in names)):
+        raise ValueError("CLIPPING_MUST_TARGET_ORIGINAL_IMAGE_NO_OVERLAY")
+    mask_slots = [i for i, name in enumerate(names) if name.startswith("auto_mask_")]
+    if len(mask_slots) != 1 or mask_slots[0] >= len(names) - 1:
+        raise ValueError("INVALID_CLIPPING_SLOT_POSITION")
+    if names[mask_slots[0] + 1] != clip["end"]:
+        raise ValueError("CLIPPING_NOT_ADJACENT_TO_ORIGINAL_TARGET")
+    if any(a.get("path") == "mask-overlay" for skin in skins
+           for values in skin.get("attachments", {}).values()
+           for a in values.values()):
+        raise ValueError("REPLACEMENT_TEXTURE_NOT_ALLOWED")
     if hashlib.sha256(active["source"].read_bytes()).hexdigest() != active["sha256"]:
         raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
     base = active["source"].parent / "SpineMaskResults"
@@ -365,7 +376,6 @@ def commit_result(payload):
                 target = dest / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
-        shutil.copy2(stage["temp"] / "mask-overlay.png", dest / "mask-overlay.png")
         json_out = folder / (active["source"].stem + "-mask.json")
         json_out.write_text(json.dumps(updated, separators=(",", ":")), encoding="utf-8")
         cli = editor_cli()
