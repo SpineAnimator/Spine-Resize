@@ -160,19 +160,69 @@ def open_project(_params):
     try:
         json_path = export_json(path, staging)
         base_dir = path.parent
-        image_candidates = []
-        for folder in (base_dir / "images", base_dir):
-            if not folder.is_dir():
+        skeleton = json.loads(json_path.read_text(encoding="utf-8"))
+        skins = skeleton.get("skins") or []
+        if isinstance(skins, dict):
+            skins = [{"attachments": v} for v in skins.values()]
+        wanted = set()
+        for skin in skins:
+            for attachments in skin.get("attachments", {}).values():
+                for name, attachment in attachments.items():
+                    if not isinstance(attachment, dict):
+                        continue
+                    if attachment.get("type", "region") != "region":
+                        continue
+                    referenced = str(attachment.get("path") or name).replace("\\\\", "/")
+                    wanted.add(Path(referenced).stem.casefold())
+        if not wanted:
+            raise ValueError("NO_REGION_ATTACHMENTS_IN_OPEN_PROJECT")
+        # Read only textures actually referenced by the Spine skeleton.
+        # Unrelated NDA artwork in the same folder is never imported.
+        candidates = []
+        seen = set()
+        roots = [base_dir / "images", base_dir]
+        for root in roots:
+            if not root.is_dir():
                 continue
-            for p in sorted(folder.iterdir()):
-                if p.is_file() and p.suffix.lower() in IMAGES and p.stat().st_size <= MAX_PROJECT:
-                    image_candidates.append(p)
+            for current, subdirs, filenames in os.walk(root):
+                depth = len(Path(current).relative_to(root).parts)
+                if depth > 2:
+                    subdirs[:] = []
+                    continue
+                subdirs[:] = [x for x in subdirs if not x.startswith(".")
+                             and x not in ("SpineMaskResults", "node_modules")]
+                for filename in sorted(filenames):
+                    candidate = Path(current) / filename
+                    if candidate.suffix.lower() not in IMAGES:
+                        continue
+                    if candidate.stem.casefold() not in wanted:
+                        continue
+                    try:
+                        if not candidate.is_file() or candidate.stat().st_size > MAX_PROJECT:
+                            continue
+                        real = candidate.resolve()
+                        if real in seen or not real.is_relative_to(base_dir.resolve()):
+                            continue
+                    except OSError:
+                        continue
+                    seen.add(real)
+                    relative = candidate.relative_to(root).as_posix()
+                    if any(part in ("..", ".") for part in Path(relative).parts):
+                        continue
+                    candidates.append(("images/" + relative, candidate))
         files = {"skeleton.json": json_path}
-        for p in image_candidates[:MAX_FILES - 1]:
-            key = "images/" + p.name
-            if key in files:
+        distinct = set()
+        for key, candidate in candidates:
+            if candidate.name.casefold() in distinct:
+                # Distinct attachments sharing the same basename cannot be
+                # safely disambiguated by the current browser file picker.
                 continue
-            files[key] = p
+            distinct.add(candidate.name.casefold())
+            files[key] = candidate
+        if len(files) <= 1:
+            raise ValueError("NO_MATCHING_REGION_IMAGE_FOUND")
+        if len(files) > MAX_FILES or sum(p.stat().st_size for p in files.values()) > 64 * 1024 * 1024:
+            raise ValueError("SPINE_PROJECT_RESOURCE_LIMIT")
         if stage and stage.get("temp"):
             shutil.rmtree(stage["temp"], ignore_errors=True)
         if session and session.get("export"):
@@ -287,7 +337,10 @@ def commit_result(payload):
     try:
         for key, source in active["files"].items():
             if key.startswith("images/"):
-                shutil.copy2(source, dest / Path(key).name)
+                relative = Path(key).relative_to("images")
+                target = dest / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(source, target)
         shutil.copy2(stage["temp"] / "mask-overlay.png", dest / "mask-overlay.png")
         json_out = folder / (active["source"].stem + "-mask.json")
         json_out.write_text(json.dumps(updated, separators=(",", ":")), encoding="utf-8")
