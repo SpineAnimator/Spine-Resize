@@ -140,7 +140,7 @@ class NativeBridgeTests(unittest.TestCase):
     def test_editor_open_is_verified_not_assumed(self):
         # A submitted open command alone is not proof of a loaded project.
         with patch.object(host.platform,"system",return_value="Darwin"):
-            with patch.object(host,"recent_editor_project",return_value=self.project), \
+            with patch.object(host,"recent_editor_project",return_value=self.project.resolve()), \
                  patch.object(host.subprocess,"run") as proc:
                 opened,route=host.verified_open_in_spine(self.project)
                 self.assertTrue(opened)
@@ -178,6 +178,7 @@ class NativeBridgeTests(unittest.TestCase):
 
     def test_macos_live_editor_launch_argv_without_apple_events(self):
         """Unique explicit live launch project is safe; no mtime guessing."""
+        self.mock.stop()  # Test the real detector, not setUp's import fixture
         example = self.root / "Source Scene.spine"
         example.write_bytes(b"project file for launch-argument test")
         command = ("/Applications/Spine.app/Contents/MacOS/Spine "
@@ -200,6 +201,7 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertEqual(method, "editor_launch_argument")
 
     def test_macos_never_selects_batch_import_or_export(self):
+        self.mock.stop()  # Test the real detector, not setUp's import fixture
         example = self.root / "Source Scene.spine"
         example.write_bytes(b"project file")
         def fake_run(args, **kwargs):
