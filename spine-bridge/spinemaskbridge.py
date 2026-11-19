@@ -525,7 +525,7 @@ def wait_for_editor_open(project, seconds=12):
 def spine_editor_instance_pids():
     """Return the running Spine 4.3 GUI process IDs, not batch CLI jobs."""
     result = subprocess.run(
-        ["pgrep", "-f", r"^/Applications/Spine\\.app/Contents/MacOS/Spine( |$)"],
+        ["pgrep", "-f", r"^/Applications/Spine\.app/Contents/MacOS/Spine( |$)"],
         capture_output=True, text=True, timeout=4
     )
     return sorted({line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()})
