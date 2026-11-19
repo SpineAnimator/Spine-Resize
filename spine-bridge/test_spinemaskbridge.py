@@ -65,7 +65,7 @@ class NativeBridgeTests(unittest.TestCase):
              patch.dict(host.os.environ,{"DISPLAY":":99"},clear=True), \
              patch.object(host.shutil,"which",side_effect=lambda exe: "/usr/bin/zenity" if exe=="zenity" else None), \
              patch.object(host.subprocess,"run") as proc:
-            proc.return_value=subprocess.CompletedProcess([],0,str(self.project)+"\\n","")
+            proc.return_value=subprocess.CompletedProcess([],0,str(self.project),"")
             chosen=host.pick_native_project()
             self.assertEqual(chosen,self.project.resolve())
             self.assertEqual(proc.call_args.args[0][0],"zenity")

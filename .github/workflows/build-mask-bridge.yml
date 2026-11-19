@@ -94,7 +94,7 @@ jobs:
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq install_spinemask_linux.sh
           bash -n spine-mask-resize-bridge/install_spinemask_linux.sh
           sha256sum Spine-Mask-Resize-Bridge.zip
-          echo 'SPINE_MASK_MAC_WINDOWS_PACKAGE_PASS'
+          echo 'SPINE_MASK_MAC_WINDOWS_LINUX_PACKAGE_PASS'
       - name: Publish verified extension and native hosts in existing Release
         shell: bash
         env:
@@ -105,7 +105,7 @@ jobs:
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
               --title 'Spine Mask + Resize Native Chrome Bridge' \
-              --notes 'Chrome MV3 extension, native host for macOS and Windows, local-only project import.' \
+              --notes 'Chrome MV3 extension, native host for macOS, Windows and Linux, local-only project import.' \
               --target main
           fi
           gh release upload "$TAG" "dist/Spine-Mask-Resize-Bridge.zip" \
