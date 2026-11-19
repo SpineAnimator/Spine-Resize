@@ -107,10 +107,15 @@ def install(ids, data=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--extension-id", action="append", default=[])
+    parser.add_argument("--browser", choices=("chrome", "chromium"), default="chrome",
+                        help="Linux browser: Chrome or Chromium")
     parser.add_argument("--chrome-data", type=Path, default=None,
                         help="Chrome data directory for isolated bridge testing")
     args = parser.parse_args()
-    directory = args.chrome_data or chrome_data()
+    directory = args.chrome_data or (
+        Path.home() / ".config/chromium"
+        if platform.system() == "Linux" and args.browser == "chromium"
+        else chrome_data())
     ids = set(args.extension_id) | find_extension_ids(directory)
     ids = {x for x in ids if len(x)==32 and all("a"<=c<="p" for c in x)}
     if not ids:

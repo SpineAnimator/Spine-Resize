@@ -259,6 +259,20 @@ def pick_native_project():
             '{$dialog.FileName}'
         )
         cmd = ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script]
+    elif system == "Linux":
+        # Linux desktops: choose with the OS-owned file dialog, not a path
+        # supplied by a website. Headless CI uses the explicit upload API.
+        if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            raise ValueError("LINUX_PICKER_REQUIRES_DESKTOP_USE_API_IN_CI")
+        if shutil.which("zenity"):
+            cmd = ["zenity", "--file-selection",
+                   "--title=Choose the Spine project to mask",
+                   "--file-filter=Spine projects | *.spine *.json *.skel"]
+        elif shutil.which("kdialog"):
+            cmd = ["kdialog", "--getopenfilename", str(Path.home()),
+                   "*.spine *.json *.skel|Spine projects"]
+        else:
+            raise ValueError("LINUX_PICKER_REQUIRES_ZENITY_OR_KDIALOG")
     else:
         raise ValueError("NATIVE_PICKER_UNSUPPORTED_ON_THIS_OS")
     try:

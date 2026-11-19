@@ -60,6 +60,36 @@ class NativeBridgeTests(unittest.TestCase):
         self.mock.start()
         self.addCleanup(self.mock.stop)
 
+    def test_linux_project_picker_and_headless_guard(self):
+        with patch.object(host.platform,"system",return_value="Linux"), \
+             patch.dict(host.os.environ,{"DISPLAY":":99"},clear=True), \
+             patch.object(host.shutil,"which",side_effect=lambda exe: "/usr/bin/zenity" if exe=="zenity" else None), \
+             patch.object(host.subprocess,"run") as proc:
+            proc.return_value=subprocess.CompletedProcess([],0,str(self.project)+"\\n","")
+            chosen=host.pick_native_project()
+            self.assertEqual(chosen,self.project.resolve())
+            self.assertEqual(proc.call_args.args[0][0],"zenity")
+        with patch.object(host.platform,"system",return_value="Linux"), \
+             patch.dict(host.os.environ,{},clear=True):
+            with self.assertRaisesRegex(ValueError,"LINUX_PICKER_REQUIRES_DESKTOP"):
+                host.pick_native_project()
+
+    def test_linux_extension_host_registration(self):
+        script=Path(__file__).with_name("install_spinemask_host.py")
+        spec=importlib.util.spec_from_file_location("install_spinemask_host",script)
+        installer=importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(installer)
+        extension_id="abcdefghijklmnopabcdefghijklmnop"
+        profile=self.root/".config"/"google-chrome"
+        with patch.object(installer.platform,"system",return_value="Linux"), \
+             patch.object(installer.Path,"home",return_value=self.root):
+            manifest=installer.install({extension_id},profile)
+        body=json.loads(manifest.read_text(encoding="utf-8"))
+        self.assertEqual(body["name"],"spinemaskbridge")
+        self.assertEqual(body["type"],"stdio")
+        self.assertEqual(body["allowed_origins"],["chrome-extension://"+extension_id+"/"])
+        self.assertTrue(Path(body["path"]).is_file())
+
     def test_native_framing_ping(self):
         request=json.dumps({"id":7,"method":"ping","params":{}}).encode()
         proc=subprocess.run([sys.executable,str(SCRIPT)],
