@@ -43,6 +43,31 @@ def clip_json():
     return j
 
 
+def multi_clip_json():
+    return {
+        "skeleton":{"spine":"4.3.26","width":124,"height":64,"images":"./images/"},
+        "bones":[{"name":"root"},{"name":"left","parent":"root","x":-30},
+                 {"name":"right","parent":"root","x":30}],
+        "slots":[
+            {"name":"auto_mask_multi","bone":"root","attachment":"clip"},
+            {"name":"image_a","bone":"left","attachment":"partA"},
+            {"name":"image_b","bone":"right","attachment":"partB"},
+            {"name":"hotspot","bone":"root","attachment":"hotspot"}
+        ],
+        "skins":[{"name":"default","attachments":{
+            "auto_mask_multi":{"clip":{"type":"clipping","end":"image_b","vertexCount":4,
+                "vertices":[1,1,-24,-24,1, 1,1,24,-24,1, 1,2,24,24,1, 1,2,-24,24,1]}},
+            "image_a":{"partA":{"type":"region","path":"part-a","width":48,"height":48}},
+            "image_b":{"partB":{"type":"region","path":"part-b","width":48,"height":48}},
+            "hotspot":{"hotspot":{"type":"region","path":"hotspot","width":8,"height":8}}
+        }}],
+        "animations":{"idle":{"bones":{
+            "left":{"rotate":[{"time":0,"angle":0},{"time":1,"angle":25}]},
+            "right":{"rotate":[{"time":0,"angle":0},{"time":1,"angle":-25}]}
+        }}}
+    }
+
+
 class NativeBridgeTests(unittest.TestCase):
     def setUp(self):
         self.dir=tempfile.TemporaryDirectory()
@@ -53,6 +78,8 @@ class NativeBridgeTests(unittest.TestCase):
         images=self.root/"images"
         images.mkdir()
         (images/"face.png").write_bytes(PNG)
+        (images/"part-a.png").write_bytes(PNG)
+        (images/"part-b.png").write_bytes(PNG)
         (images/"hotspot.png").write_bytes(PNG + b"unbound-artist-effect")
         (images/"nested").mkdir()
         (images/"nested"/"future-glow.webp").write_bytes(PNG + b"another-unbound-effect")
@@ -127,6 +154,8 @@ class NativeBridgeTests(unittest.TestCase):
         reply=json.loads(proc.stdout[4:4+length])
         self.assertEqual(reply["id"],19)
         self.assertEqual(reply["result"]["protocol"],"spinemask/1")
+        self.assertIn("multi-slot-clipping",reply["result"]["capabilities"])
+        self.assertIn("weighted-clipping",reply["result"]["capabilities"])
 
     def test_native_framing_ping(self):
         request=json.dumps({"id":7,"method":"ping","params":{}}).encode()
@@ -190,6 +219,60 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertEqual(exported["slots"][1]["name"],"original")
         self.assertEqual(exported["skins"][0]["attachments"]["auto_mask_original"]["clip"]["end"],"original")
         self.assertIn("idle",exported["animations"])
+
+    def test_weighted_clipping_vertex_validation(self):
+        project=multi_clip_json()
+        clip=project["skins"][0]["attachments"]["auto_mask_multi"]["clip"]
+        info=host.validate_clipping_vertices(project,clip)
+        self.assertTrue(info["weighted"])
+        self.assertEqual(info["boneIndices"],[1,2])
+        invalid=json.loads(json.dumps(project))
+        invalid["skins"][0]["attachments"]["auto_mask_multi"]["clip"]["vertices"][1]=9
+        with self.assertRaisesRegex(ValueError,"WEIGHTED_CLIPPING_BONE_INDEX_INVALID"):
+            host.validate_clipping_vertices(invalid,invalid["skins"][0]["attachments"]["auto_mask_multi"]["clip"])
+        invalid=json.loads(json.dumps(project))
+        invalid["skins"][0]["attachments"]["auto_mask_multi"]["clip"]["vertices"][4]=0.5
+        with self.assertRaisesRegex(ValueError,"WEIGHTED_CLIPPING_WEIGHTS_NOT_NORMALIZED"):
+            host.validate_clipping_vertices(invalid,invalid["skins"][0]["attachments"]["auto_mask_multi"]["clip"])
+
+    def test_multi_slot_weighted_mask_commit_opens_originating_editor(self):
+        original=self.project.read_bytes()
+        opened=host.open_project({})
+        output=json.dumps(multi_clip_json()).encode("utf-8")
+        staged=host.begin_result({"session":opened["session"],"files":[
+            {"name":"mask.json","size":len(output)}
+        ]})
+        host.write_chunk({"stage":staged["stage"],"name":"mask.json","offset":0,
+                          "base64":base64.b64encode(output).decode("ascii")})
+        def fake_run(command,**kwargs):
+            if "--import" in command:
+                native=Path(command[command.index("--output")+1])
+                native.write_bytes(b"FAKE_SPINE_NATIVE_BINARY"*10)
+                return subprocess.CompletedProcess(command,0,"","")
+            raise AssertionError("unexpected subprocess call")
+        with patch.object(host,"editor_cli",return_value="/fake/Spine"), \\
+             patch.object(host.subprocess,"run",side_effect=fake_run), \\
+             patch.object(host,"verified_open_in_spine",return_value=(True,"existing_instance")) as verify:
+            done=host.commit_result({"session":opened["session"],"stage":staged["stage"],"openEditor":True})
+        self.assertTrue(done["saved"])
+        self.assertTrue(done["imported"])
+        self.assertTrue(done["opened"])
+        self.assertEqual(done["openVerification"],"existing_instance")
+        self.assertEqual(done["project"],"scene-mask.spine")
+        verify.assert_called_once()
+        self.assertEqual(Path(verify.call_args.args[0]).name,"scene-mask.spine")
+        self.assertEqual(self.project.read_bytes(),original,"the original Spine source must not be overwritten")
+        folder=Path(done["location"])
+        self.assertTrue((folder/"scene-mask.spine").is_file())
+        self.assertTrue((folder/"images"/"part-a.png").is_file())
+        self.assertTrue((folder/"images"/"part-b.png").is_file())
+        self.assertTrue((folder/"images"/"hotspot.png").is_file())
+        saved=json.loads((folder/"scene-mask.json").read_text(encoding="utf-8"))
+        self.assertEqual([slot["name"] for slot in saved["slots"]],
+                         ["auto_mask_multi","image_a","image_b","hotspot"])
+        self.assertEqual(saved["skins"][0]["attachments"]["auto_mask_multi"]["clip"]["end"],"image_b")
+        self.assertEqual(host.validate_clipping_vertices(saved,
+            saved["skins"][0]["attachments"]["auto_mask_multi"]["clip"])["boneIndices"],[1,2])
 
     def test_reject_arbitrary_disk_read_and_corrupted_write(self):
         opened=host.open_project({})
