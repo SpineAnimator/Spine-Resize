@@ -220,6 +220,18 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertEqual(exported["skins"][0]["attachments"]["auto_mask_original"]["clip"]["end"],"original")
         self.assertIn("idle",exported["animations"])
 
+    def test_ping_capabilities_are_platform_aware(self):
+        with patch.object(host.platform,"system",return_value="Darwin"):
+            mac=host.HANDLERS["ping"]({})
+        self.assertIn("multi-slot-clipping",mac["capabilities"])
+        self.assertIn("weighted-clipping",mac["capabilities"])
+        self.assertIn("verified-editor-open",mac["capabilities"])
+        with patch.object(host.platform,"system",return_value="Linux"):
+            linux=host.HANDLERS["ping"]({})
+        self.assertIn("multi-slot-clipping",linux["capabilities"])
+        self.assertIn("weighted-clipping",linux["capabilities"])
+        self.assertNotIn("verified-editor-open",linux["capabilities"])
+
     def test_weighted_clipping_vertex_validation(self):
         project=multi_clip_json()
         clip=project["skins"][0]["attachments"]["auto_mask_multi"]["clip"]
