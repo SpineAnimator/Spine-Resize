@@ -806,10 +806,16 @@ def read_import_chunk(payload):
 
 
 def ping(_):
+    system = platform.system()
     capabilities = ["multi-slot-clipping", "weighted-clipping"]
-    if platform.system() == "Darwin":
-        capabilities.append("verified-editor-open")
-    return {"connected": True, "protocol": "spinemask/1", "capabilities": capabilities}
+    if system == "Darwin":
+        capabilities.extend(["verified-editor-open", "originating-editor-open"])
+    return {
+        "connected": True,
+        "protocol": "spinemask/1",
+        "platform": system,
+        "capabilities": capabilities,
+    }
 
 
 HANDLERS = {

@@ -223,14 +223,22 @@ class NativeBridgeTests(unittest.TestCase):
     def test_ping_capabilities_are_platform_aware(self):
         with patch.object(host.platform,"system",return_value="Darwin"):
             mac=host.HANDLERS["ping"]({})
+        self.assertEqual(mac["platform"],"Darwin")
         self.assertIn("multi-slot-clipping",mac["capabilities"])
         self.assertIn("weighted-clipping",mac["capabilities"])
         self.assertIn("verified-editor-open",mac["capabilities"])
+        self.assertIn("originating-editor-open",mac["capabilities"])
         with patch.object(host.platform,"system",return_value="Linux"):
             linux=host.HANDLERS["ping"]({})
+        self.assertEqual(linux["platform"],"Linux")
         self.assertIn("multi-slot-clipping",linux["capabilities"])
         self.assertIn("weighted-clipping",linux["capabilities"])
         self.assertNotIn("verified-editor-open",linux["capabilities"])
+        self.assertNotIn("originating-editor-open",linux["capabilities"])
+        with patch.object(host.platform,"system",return_value="Windows"):
+            windows=host.HANDLERS["ping"]({})
+        self.assertEqual(windows["platform"],"Windows")
+        self.assertNotIn("originating-editor-open",windows["capabilities"])
 
     def test_weighted_clipping_vertex_validation(self):
         project=multi_clip_json()
