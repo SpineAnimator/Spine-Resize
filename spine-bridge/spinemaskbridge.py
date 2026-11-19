@@ -8,6 +8,7 @@ Native Messaging frames are unsigned 32-bit little-endian length + UTF-8 JSON.
 import base64
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -574,6 +575,53 @@ def verified_open_in_spine(project, editor_cli_path=None):
         return False, "editor_launch_failed"
 
 
+def validate_clipping_vertices(project, clip):
+    count = clip.get("vertexCount", 0)
+    vertices = clip.get("vertices", [])
+    bones = project.get("bones", [])
+    if (isinstance(count, bool) or not isinstance(count, int) or not 3 <= count <= 2500
+            or not isinstance(vertices, list)):
+        raise ValueError("INVALID_CLIPPING_VERTICES")
+    if len(vertices) == count * 2:
+        if any(isinstance(value, bool) or not isinstance(value, (int, float))
+               or not math.isfinite(value) for value in vertices):
+            raise ValueError("INVALID_CLIPPING_VERTICES")
+        return {"weighted": False, "boneIndices": []}
+    if len(vertices) <= count * 2 or not isinstance(bones, list):
+        raise ValueError("INVALID_CLIPPING_VERTICES")
+    offset = 0
+    used_bones = set()
+    for _ in range(count):
+        if offset >= len(vertices):
+            raise ValueError("WEIGHTED_CLIPPING_VERTEX_TRUNCATED")
+        influence_count = vertices[offset]
+        offset += 1
+        if (isinstance(influence_count, bool) or not isinstance(influence_count, int)
+                or not 1 <= influence_count <= 4):
+            raise ValueError("WEIGHTED_CLIPPING_INFLUENCE_COUNT_INVALID")
+        total_weight = 0.0
+        for _ in range(influence_count):
+            if offset + 4 > len(vertices):
+                raise ValueError("WEIGHTED_CLIPPING_VERTEX_TRUNCATED")
+            bone_index, x, y, weight = vertices[offset:offset + 4]
+            offset += 4
+            if (isinstance(bone_index, bool) or not isinstance(bone_index, int)
+                    or not 0 <= bone_index < len(bones)):
+                raise ValueError("WEIGHTED_CLIPPING_BONE_INDEX_INVALID")
+            if any(isinstance(value, bool) or not isinstance(value, (int, float))
+                   or not math.isfinite(value) for value in (x, y, weight)):
+                raise ValueError("WEIGHTED_CLIPPING_COORDINATE_INVALID")
+            if weight <= 0 or weight > 1:
+                raise ValueError("WEIGHTED_CLIPPING_WEIGHT_INVALID")
+            total_weight += weight
+            used_bones.add(bone_index)
+        if abs(total_weight - 1.0) > 0.001:
+            raise ValueError("WEIGHTED_CLIPPING_WEIGHTS_NOT_NORMALIZED")
+    if offset != len(vertices):
+        raise ValueError("WEIGHTED_CLIPPING_VERTEX_TRAILING_DATA")
+    return {"weighted": True, "boneIndices": sorted(used_bones)}
+
+
 def commit_result(payload):
     global stage
     active = checked_session(payload)
@@ -592,15 +640,15 @@ def commit_result(payload):
     if len(clips) != 1:
         raise ValueError("EXPECTED_EXACTLY_ONE_CLIPPING_ATTACHMENT")
     clip = clips[0]
+    validate_clipping_vertices(updated, clip)
     names = [slot.get("name") for slot in updated["slots"]]
-    if (not clip.get("end") in names or
+    if (clip.get("end") not in names or
             any(name.startswith("auto_mask_overlay") for name in names)):
         raise ValueError("CLIPPING_MUST_TARGET_ORIGINAL_IMAGE_NO_OVERLAY")
     mask_slots = [i for i, name in enumerate(names) if name.startswith("auto_mask_")]
-    if len(mask_slots) != 1 or mask_slots[0] >= len(names) - 1:
+    end_index = names.index(clip["end"])
+    if len(mask_slots) != 1 or mask_slots[0] >= end_index:
         raise ValueError("INVALID_CLIPPING_SLOT_POSITION")
-    if names[mask_slots[0] + 1] != clip["end"]:
-        raise ValueError("CLIPPING_NOT_ADJACENT_TO_ORIGINAL_TARGET")
     if any(a.get("path") == "mask-overlay" for skin in skins
            for values in skin.get("attachments", {}).values()
            for a in values.values()):
@@ -734,7 +782,7 @@ def read_import_chunk(payload):
 
 
 HANDLERS = {
-    "ping": lambda _: {"connected": True, "protocol": "spinemask/1"},
+    "ping": lambda _: {"connected": True, "protocol": "spinemask/1", "capabilities": ["multi-slot-clipping", "weighted-clipping", "verified-editor-open"]},
     "open_project": open_project,
     "choose_project": choose_project,
     "begin_import": begin_import,
