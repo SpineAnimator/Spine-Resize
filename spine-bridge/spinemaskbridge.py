@@ -522,57 +522,54 @@ def wait_for_editor_open(project, seconds=12):
     return False
 
 
-def verified_open_in_spine(project, editor_cli_path=None):
-    """Return (verified_opened, route) rather than assuming Popen means success.
+def spine_editor_instance_pids():
+    """Return the running Spine 4.3 GUI process IDs, not batch CLI jobs."""
+    result = subprocess.run(
+        ["pgrep", "-f", r"^/Applications/Spine\.app/Contents/MacOS/Spine( |$)"],
+        capture_output=True, text=True, timeout=4
+    )
+    return sorted({line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()})
 
-    The existing editor is tried first. On macOS the application may silently
-    ignore an Apple open-file event, so create exactly one independent editor
-    instance with the officially supported CLI project argument as a fallback.
-    The source instance is never closed or modified.
+
+def verified_open_in_spine(project, editor_cli_path=None):
+    """Open only in the already-running originating Spine Editor instance.
+
+    Never launch a second Editor process. On macOS, the project source is
+    discovered from the running Editor, and open -a sends the new .spine
+    document to that existing application. Success requires both the recent
+    project path and the same GUI PID before and after the open request.
     """
     project = Path(project).resolve()
     if platform.system() != "Darwin":
-        try:
-            if platform.system() == "Windows":
-                os.startfile(str(project))
-            else:
-                subprocess.Popen([editor_cli_path or "Spine", str(project)],
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return False, "open_requested_not_verified"
-        except (OSError, AttributeError):
-            return False, "editor_open_failed"
-    if recent_editor_project() == project:
-        return True, "already_open"
+        # Shell-opening a file can silently start a second Spine process. That
+        # is not the requested same-editor handoff, so fail closed here.
+        return False, "same_editor_open_not_supported_on_platform"
+
     try:
-        existing = subprocess.run(
+        before = spine_editor_instance_pids()
+    except (OSError, subprocess.TimeoutExpired):
+        return False, "originating_editor_process_unavailable"
+    if not before:
+        return False, "originating_editor_not_running"
+    if len(before) != 1:
+        return False, "multiple_editors_manual_selection_required"
+    if recent_editor_project() == project:
+        return True, "already_open_in_originating_instance"
+
+    try:
+        request = subprocess.run(
             ["open", "-a", "/Applications/Spine.app", str(project)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-        if existing.returncode == 0 and wait_for_editor_open(project, seconds=8):
-            return True, "existing_instance"
+        if request.returncode != 0:
+            return False, "existing_instance_open_request_failed"
+        if not wait_for_editor_open(project, seconds=12):
+            return False, "existing_instance_open_not_confirmed"
+        after = spine_editor_instance_pids()
+        if after != before:
+            return False, "different_editor_instance_detected"
+        return True, "originating_instance"
     except (OSError, subprocess.TimeoutExpired):
-        pass
-    # Avoid accumulating runaway GUI processes on machines with several
-    # different Spine installations / many already-open Editor windows.
-    try:
-        instances = subprocess.run(
-            ["pgrep", "-f", "^/Applications/Spine.app/Contents/MacOS/Spine"],
-            capture_output=True, text=True, timeout=4)
-        if len([pid for pid in instances.stdout.splitlines() if pid.isdigit()]) >= 3:
-            return False, "multiple_editors_manual_selection_required"
-    except (OSError, subprocess.TimeoutExpired):
-        return False, "editor_instance_count_unavailable"
-    try:
-        fresh = subprocess.run(
-            ["open", "-n", "-a", "/Applications/Spine.app", "--args",
-             "--update", "4.3.26", str(project)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-        if fresh.returncode != 0:
-            return False, "editor_launch_failed"
-        if wait_for_editor_open(project, seconds=25):
-            return True, "new_instance_verified"
-        return False, "editor_loading_not_confirmed"
-    except (OSError, subprocess.TimeoutExpired):
-        return False, "editor_launch_failed"
+        return False, "existing_instance_open_request_failed"
 
 
 def validate_clipping_vertices(project, clip):

@@ -311,37 +311,79 @@ class NativeBridgeTests(unittest.TestCase):
             host.begin_result({"session":opened["session"],"files":[
                 {"name":"mask.json","size":90},{"name":"mask-overlay.png","size":70}]})
 
-    def test_editor_open_is_verified_not_assumed(self):
-        # A submitted open command alone is not proof of a loaded project.
+    def test_spine_editor_instance_pid_matcher_is_exact(self):
+        from subprocess import CompletedProcess
+        def fake_run(argv,**kwargs):
+            self.assertEqual(argv[0],"pgrep")
+            self.assertEqual(argv[1],"-f")
+            self.assertEqual(argv[2],r"^/Applications/Spine\.app/Contents/MacOS/Spine( |$)")
+            return CompletedProcess(argv,0,"99800\nnot-a-pid\n99801\n","")
+        with patch.object(host.subprocess,"run",side_effect=fake_run):
+            self.assertEqual(host.spine_editor_instance_pids(),["99800","99801"])
+
+    def test_editor_open_targets_only_the_originating_instance(self):
         with patch.object(host.platform,"system",return_value="Darwin"):
-            with patch.object(host,"recent_editor_project",return_value=self.project.resolve()), \
+            with patch.object(host,"spine_editor_instance_pids",return_value=["99800"]), \
+                 patch.object(host,"recent_editor_project",return_value=self.project.resolve()), \
                  patch.object(host.subprocess,"run") as proc:
                 opened,route=host.verified_open_in_spine(self.project)
                 self.assertTrue(opened)
-                self.assertEqual(route,"already_open")
+                self.assertEqual(route,"already_open_in_originating_instance")
                 proc.assert_not_called()
 
             def fake_run(argv,**kwargs):
                 from subprocess import CompletedProcess
-                if argv[0]=="pgrep":
-                    return CompletedProcess(argv,0,stdout="99800\\n",stderr="")
-                return CompletedProcess(argv,0,stdout="",stderr="")
+                if argv[0]=="open":
+                    self.assertNotIn("-n",argv,"the handoff must never launch a second Spine process")
+                    return CompletedProcess(argv,0,"","")
+                raise AssertionError("unexpected subprocess call: "+str(argv))
 
-            with patch.object(host,"recent_editor_project",return_value=None), \
-                 patch.object(host,"wait_for_editor_open",side_effect=[False,True]) as wait, \
+            with patch.object(host,"spine_editor_instance_pids",side_effect=[["99800"],["99800"]]), \
+                 patch.object(host,"recent_editor_project",return_value=None), \
+                 patch.object(host,"wait_for_editor_open",return_value=True) as wait, \
                  patch.object(host.subprocess,"run",side_effect=fake_run) as calls:
                 opened,route=host.verified_open_in_spine(self.project)
                 self.assertTrue(opened)
-                self.assertEqual(route,"new_instance_verified")
-                self.assertTrue(any("open"==c.args[0][0] and "-n" in c.args[0] for c in calls.call_args_list))
-                self.assertEqual(wait.call_count,2)
+                self.assertEqual(route,"originating_instance")
+                wait.assert_called_once_with(self.project.resolve(),seconds=12)
+                self.assertEqual(calls.call_count,1)
+                self.assertEqual(calls.call_args.args[0][:3],["open","-a","/Applications/Spine.app"])
 
-            with patch.object(host,"recent_editor_project",return_value=None), \
-                 patch.object(host,"wait_for_editor_open",side_effect=[False,False]), \
+            # If the open event is ignored, do not fall back to open -n.
+            with patch.object(host,"spine_editor_instance_pids",return_value=["99800"]), \
+                 patch.object(host,"recent_editor_project",return_value=None), \
+                 patch.object(host,"wait_for_editor_open",return_value=False), \
+                 patch.object(host.subprocess,"run",side_effect=fake_run) as calls:
+                opened,route=host.verified_open_in_spine(self.project)
+                self.assertFalse(opened)
+                self.assertEqual(route,"existing_instance_open_not_confirmed")
+                self.assertEqual(calls.call_count,1)
+                self.assertNotIn("-n",calls.call_args.args[0])
+
+            # A changed GUI PID means a different editor was launched.
+            with patch.object(host,"spine_editor_instance_pids",side_effect=[["99800"],["99801"]]), \
+                 patch.object(host,"recent_editor_project",return_value=None), \
+                 patch.object(host,"wait_for_editor_open",return_value=True), \
                  patch.object(host.subprocess,"run",side_effect=fake_run):
                 opened,route=host.verified_open_in_spine(self.project)
                 self.assertFalse(opened)
-                self.assertEqual(route,"editor_loading_not_confirmed")
+                self.assertEqual(route,"different_editor_instance_detected")
+
+            with patch.object(host,"spine_editor_instance_pids",return_value=["99800","99801"]), \
+                 patch.object(host.subprocess,"run") as proc:
+                opened,route=host.verified_open_in_spine(self.project)
+                self.assertFalse(opened)
+                self.assertEqual(route,"multiple_editors_manual_selection_required")
+                proc.assert_not_called()
+
+    def test_other_platforms_do_not_launch_a_second_spine_instance(self):
+        for system in ("Linux","Windows"):
+            with patch.object(host.platform,"system",return_value=system), \
+                 patch.object(host.subprocess,"Popen") as popen:
+                opened,route=host.verified_open_in_spine(self.project)
+                self.assertFalse(opened)
+                self.assertEqual(route,"same_editor_open_not_supported_on_platform")
+                popen.assert_not_called()
 
     def test_no_unbounded_discovery(self):
         host.session=None
