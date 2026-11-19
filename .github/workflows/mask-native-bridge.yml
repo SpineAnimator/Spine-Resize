@@ -11,6 +11,16 @@ on:
       - spine-bridge/test_spinemaskbridge.py
       - spine-bridge/test_mask_extension.mjs
       - .github/workflows/mask-native-bridge.yml
+  pull_request:
+    paths:
+      - spine-bridge/spinemaskbridge.py
+      - spine-bridge/install_spinemask_host.py
+      - spine-bridge/background.js
+      - spine-bridge/mask-content.js
+      - spine-bridge/manifest.json
+      - spine-bridge/test_spinemaskbridge.py
+      - spine-bridge/test_mask_extension.mjs
+      - .github/workflows/mask-native-bridge.yml
   workflow_dispatch:
 permissions:
   contents: read
