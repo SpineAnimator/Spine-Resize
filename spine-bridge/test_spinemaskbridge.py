@@ -247,6 +247,17 @@ class NativeBridgeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"WEIGHTED_CLIPPING_WEIGHTS_NOT_NORMALIZED"):
             host.validate_clipping_vertices(invalid,invalid["skins"][0]["attachments"]["auto_mask_multi"]["clip"])
 
+    def test_weighted_clipping_bones_must_descend_from_mask_slot_bone(self):
+        project=multi_clip_json()
+        clip=project["skins"][0]["attachments"]["auto_mask_multi"]["clip"]
+        info=host.validate_clipping_vertices(project,clip)
+        host.validate_weighted_clip_bone_ancestry(project,project["slots"][0],info)
+        invalid=json.loads(json.dumps(project))
+        invalid["bones"][1]["parent"]="missing_parent"
+        invalid_info=host.validate_clipping_vertices(invalid,clip)
+        with self.assertRaisesRegex(ValueError,"WEIGHTED_CLIPPING_BONE_OUTSIDE_CLIP_HIERARCHY"):
+            host.validate_weighted_clip_bone_ancestry(invalid,invalid["slots"][0],invalid_info)
+
     def test_multi_slot_weighted_mask_commit_opens_originating_editor(self):
         original=self.project.read_bytes()
         opened=host.open_project({})

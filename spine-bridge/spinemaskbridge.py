@@ -622,6 +622,32 @@ def validate_clipping_vertices(project, clip):
     return {"weighted": True, "boneIndices": sorted(used_bones)}
 
 
+def validate_weighted_clip_bone_ancestry(project, clip_slot, info):
+    if not info.get("weighted"):
+        return
+    bones = project.get("bones", [])
+    clip_bone_name = clip_slot.get("bone")
+    by_name = {bone.get("name"): bone for bone in bones if bone.get("name")}
+    if not clip_bone_name or clip_bone_name not in by_name:
+        raise ValueError("CLIPPING_SLOT_BONE_INVALID")
+    for bone_index in info.get("boneIndices", []):
+        bone = bones[bone_index]
+        visited = set()
+        found = False
+        while bone:
+            name = bone.get("name")
+            if name == clip_bone_name:
+                found = True
+                break
+            parent = bone.get("parent")
+            if not parent or parent in visited:
+                break
+            visited.add(parent)
+            bone = by_name.get(parent)
+        if not found:
+            raise ValueError("WEIGHTED_CLIPPING_BONE_OUTSIDE_CLIP_HIERARCHY")
+
+
 def commit_result(payload):
     global stage
     active = checked_session(payload)
@@ -640,7 +666,7 @@ def commit_result(payload):
     if len(clips) != 1:
         raise ValueError("EXPECTED_EXACTLY_ONE_CLIPPING_ATTACHMENT")
     clip = clips[0]
-    validate_clipping_vertices(updated, clip)
+    weighted_info = validate_clipping_vertices(updated, clip)
     names = [slot.get("name") for slot in updated["slots"]]
     if (clip.get("end") not in names or
             any(name.startswith("auto_mask_overlay") for name in names)):
@@ -649,6 +675,7 @@ def commit_result(payload):
     end_index = names.index(clip["end"])
     if len(mask_slots) != 1 or mask_slots[0] >= end_index:
         raise ValueError("INVALID_CLIPPING_SLOT_POSITION")
+    validate_weighted_clip_bone_ancestry(updated, updated["slots"][mask_slots[0]], weighted_info)
     if any(a.get("path") == "mask-overlay" for skin in skins
            for values in skin.get("attachments", {}).values()
            for a in values.values()):
