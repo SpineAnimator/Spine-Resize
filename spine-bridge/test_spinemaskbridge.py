@@ -250,8 +250,8 @@ class NativeBridgeTests(unittest.TestCase):
                 native.write_bytes(b"FAKE_SPINE_NATIVE_BINARY"*10)
                 return subprocess.CompletedProcess(command,0,"","")
             raise AssertionError("unexpected subprocess call")
-        with patch.object(host,"editor_cli",return_value="/fake/Spine"), \\
-             patch.object(host.subprocess,"run",side_effect=fake_run), \\
+        with patch.object(host,"editor_cli",return_value="/fake/Spine"), \
+             patch.object(host.subprocess,"run",side_effect=fake_run), \
              patch.object(host,"verified_open_in_spine",return_value=(True,"existing_instance")) as verify:
             done=host.commit_result({"session":opened["session"],"stage":staged["stage"],"openEditor":True})
         self.assertTrue(done["saved"])
