@@ -4,6 +4,7 @@ import base64
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import struct
 import subprocess
@@ -89,6 +90,43 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertEqual(body["type"],"stdio")
         self.assertEqual(body["allowed_origins"],["chrome-extension://"+extension_id+"/"])
         self.assertTrue(Path(body["path"]).is_file())
+
+    def test_linux_chromium_installer_discovers_extension_and_installed_host_pings(self):
+        script=Path(__file__).with_name("install_spinemask_host.py")
+        extension_id="abcdefghijklmnopabcdefghijklmnop"
+        unrelated_id="ponmlkjihgfedcbaponmlkjihgfedcba"
+        home=self.root/"chromium-home"
+        profile=home/".config"/"chromium"/"Default"
+        profile.mkdir(parents=True)
+        preferences={"extensions":{"settings":{
+            extension_id:{"manifest":{"name":"Spine Resize Bridge"}},
+            unrelated_id:{"manifest":{"name":"Unrelated extension"}}
+        }}}
+        (profile/"Preferences").write_text(json.dumps(preferences),encoding="utf-8")
+        env=os.environ.copy()
+        env["HOME"]=str(home)
+        installed=subprocess.run(
+            [sys.executable,str(script),"--browser","chromium"],
+            env=env,capture_output=True,text=True,timeout=10)
+        self.assertEqual(installed.returncode,0,installed.stderr)
+        manifest=home/".config"/"chromium"/"NativeMessagingHosts"/"spinemaskbridge.json"
+        self.assertTrue(manifest.is_file())
+        body=json.loads(manifest.read_text(encoding="utf-8"))
+        self.assertEqual(body["name"],"spinemaskbridge")
+        self.assertEqual(body["allowed_origins"],["chrome-extension://"+extension_id+"/"])
+        host_path=Path(body["path"])
+        self.assertTrue(host_path.is_file())
+        self.assertTrue(host_path.stat().st_mode & 0o111,"installed native host must be executable")
+        request=json.dumps({"id":19,"method":"ping","params":{}}).encode()
+        proc=subprocess.run(
+            [str(host_path)],input=struct.pack("<I",len(request))+request,
+            stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
+        self.assertEqual(proc.returncode,0,proc.stderr.decode(errors="replace"))
+        self.assertGreaterEqual(len(proc.stdout),4)
+        length=struct.unpack("<I",proc.stdout[:4])[0]
+        reply=json.loads(proc.stdout[4:4+length])
+        self.assertEqual(reply["id"],19)
+        self.assertEqual(reply["result"]["protocol"],"spinemask/1")
 
     def test_native_framing_ping(self):
         request=json.dumps({"id":7,"method":"ping","params":{}}).encode()
