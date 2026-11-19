@@ -781,8 +781,15 @@ def read_import_chunk(payload):
     return packet
 
 
+def ping(_):
+    capabilities = ["multi-slot-clipping", "weighted-clipping"]
+    if platform.system() == "Darwin":
+        capabilities.append("verified-editor-open")
+    return {"connected": True, "protocol": "spinemask/1", "capabilities": capabilities}
+
+
 HANDLERS = {
-    "ping": lambda _: {"connected": True, "protocol": "spinemask/1", "capabilities": ["multi-slot-clipping", "weighted-clipping", "verified-editor-open"]},
+    "ping": ping,
     "open_project": open_project,
     "choose_project": choose_project,
     "begin_import": begin_import,
