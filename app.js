@@ -9289,6 +9289,41 @@ window.boneHierarchy = boneHierarchy;
       paint();
     }
   });
+
+  // Stable same-origin API for SA. It reuses the exact production parser,
+  // skeleton transforms and ZIP packer without driving UI buttons or downloads.
+  async function resizeProjectForAgent(fileList, options = {}) {
+    const selected = Array.from(fileList || []);
+    if (!selected.length) throw new Error("SA Resize requires at least one source file.");
+    const entries = await collectFiles(selected);
+    const result = await resizeEntries(entries, {
+      target: options.target === undefined ? (Number(size.value) || 300) : Number(options.target),
+      times: options.times === undefined ? Number(times.value) : Number(options.times),
+      percent: options.percent === undefined ? Number(percent.value) : Number(options.percent),
+      mode: ["side", "times", "percent"].includes(options.mode) ? options.mode : "side",
+      bonesToScale: Array.isArray(options.bonesToScale) ? options.bonesToScale : getBonesToScale(),
+      bake: options.bake === undefined ? true : options.bake === true,
+      center: options.center === undefined ? true : options.center === true
+    });
+    const blob = await zipEntries(result.entries);
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    if (bytes.length < 22 || bytes[0] !== 0x50 || bytes[1] !== 0x4b)
+      throw new Error("SA Resize produced an invalid ZIP archive.");
+    return {
+      status: "ready",
+      artifact: { bytes, filename: "sa-resized-project.zip", contentType: "application/zip" },
+      summary: { line: result.line, factor: result.factor, entryCount: result.entries.length }
+    };
+  }
+  Object.defineProperty(window, "SpineResizeAgentControl", {
+    value: Object.freeze({
+      resizeProject: resizeProjectForAgent,
+      getStatus: () => ({ ready: true, tool: "Spine-Resize", version: "browser-bundle" })
+    }),
+    writable: false,
+    configurable: false
+  });
+
   paint();
 })();
 /*! Bundled license information:
