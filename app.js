@@ -9301,7 +9301,7 @@ window.boneHierarchy = boneHierarchy;
       times: options.times === undefined ? Number(times.value) : Number(options.times),
       percent: options.percent === undefined ? Number(percent.value) : Number(options.percent),
       mode: ["side", "times", "percent"].includes(options.mode) ? options.mode : "side",
-      bonesToScale: Array.isArray(options.bonesToScale) ? options.bonesToScale : getBonesToScale(),
+      bonesToScale: Array.isArray(options.bonesToScale) ? new Set(options.bonesToScale) : (options.bonesToScale instanceof Set ? options.bonesToScale : getBonesToScale()),
       bake: options.bake === undefined ? true : options.bake === true,
       center: options.center === undefined ? true : options.center === true
     });
