@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const source=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
+assert.match(source,/async function resizeProjectForAgent\(fileList, options = \{\}\)/);
+assert.match(source,/window\.SpineResizeAgentControl/);
+assert.match(source,/resizeProject: resizeProjectForAgent/);
+assert.match(source,/new Set\(options\.bonesToScale\)/);
+assert.match(source,/zipEntries\(result\.entries\)/);
+assert.match(source,/status: "ready"/);
+assert.match(source,/bytes, filename: "sa-resized-project\.zip"/);
+console.log('SPINE_RESIZE_SA_AGENT_API_CONTRACT_PASS');
