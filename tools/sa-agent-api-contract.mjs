@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 const source=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
 assert.match(source,/async function resizeProjectForAgent\(fileList, options = \{\}\)/);
-assert.match(source,/window\.SpineResizeAgentControl/);
+assert.ok(source.includes('Object.defineProperty(window, "SpineResizeAgentControl"'));
 assert.match(source,/resizeProject: resizeProjectForAgent/);
 assert.match(source,/new Set\(options\.bonesToScale\)/);
 assert.match(source,/zipEntries\(result\.entries\)/);
