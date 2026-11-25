@@ -620,12 +620,15 @@ def recent_editor_project():
         candidates = [Path.home() / "Library/Application Support/Spine/settings/recent-1.json"]
     elif platform.system() == "Windows":
         appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData/Roaming"))
-        candidates = [appdata / "Spine/settings/recent-1.json"]
+        candidates = [
+            Path.home() / "Spine/settings/recent-1.json",
+            appdata / "Spine/settings/recent-1.json",
+        ]
     else:
         config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
         candidates = [
+            Path.home() / ".spine/settings/recent-1.json",
             config / "Spine/settings/recent-1.json",
-            Path.home() / ".local/share/Spine/settings/recent-1.json",
         ]
     for settings in candidates:
         try:
