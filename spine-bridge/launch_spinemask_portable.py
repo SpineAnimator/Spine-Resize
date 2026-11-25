@@ -248,8 +248,11 @@ def create_shortcut(home):
             "$shortcut.WorkingDirectory = " + quote(home) + "; "
             "$shortcut.Save()"
         )
-        subprocess.run(["powershell", "-NoProfile", "-Command", command],
-                       check=True, capture_output=True, timeout=10)
+        try:
+            subprocess.run(["powershell", "-NoProfile", "-Command", command],
+                           check=True, capture_output=True, timeout=10)
+        except (OSError, subprocess.SubprocessError):
+            return target
         return desktop if desktop.is_file() else target
     return home / "SpineMaskInstaller.exe"
 
