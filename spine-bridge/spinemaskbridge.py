@@ -25,13 +25,14 @@ import uuid
 MAX_FRAME = 900_000
 CHUNK = 96_000
 MAX_PROJECT = 32 * 1024 * 1024
-MAX_OUTPUT = 32 * 1024 * 1024
+MAX_OUTPUT = 128 * 1024 * 1024
 MAX_FILES = 80
 KINDS = {".json", ".spine", ".skel"}
 IMAGES = {".png", ".jpg", ".jpeg", ".webp"}
 session = None
 stage = None
 binary_import = None
+resize_save_stage = None
 
 
 def recv():
@@ -505,7 +506,14 @@ def _load_project(path, method):
         if session and session.get("export"):
             shutil.rmtree(session["export"], ignore_errors=True)
         snap = hashlib.sha256(path.read_bytes()).hexdigest()
+        source_stat = path.stat()
+        file_snapshots = {
+            key: {"size": candidate.stat().st_size, "mtime_ns": candidate.stat().st_mtime_ns}
+            for key, candidate in files.items()
+        }
         session = {"id": uuid.uuid4().hex, "source": path, "sha256": snap, "files": files,
+                   "source_size": source_stat.st_size, "source_mtime_ns": source_stat.st_mtime_ns,
+                   "file_snapshots": file_snapshots,
                    "export": staging, "method": method, "created": time.time()}
         stage = None
         return {"connected": True, "open": True, "session": session["id"],
@@ -547,7 +555,8 @@ def read_chunk(payload):
 def begin_result(payload):
     global stage
     active = checked_session(payload)
-    if hashlib.sha256(active["source"].read_bytes()).hexdigest() != active["sha256"]:
+    source_stat = active["source"].stat()
+    if source_stat.st_size != active["source_size"] or source_stat.st_mtime_ns != active["source_mtime_ns"]:
         raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
     entries = payload.get("files")
     if not isinstance(entries, list) or len(entries) != 1:
@@ -1013,6 +1022,201 @@ def read_import_chunk(payload):
     return packet
 
 
+def get_open_file_path(_):
+    path, method = spine_open_path()
+    if not path:
+        return None
+    return {"path": str(path), "foundBy": method}
+
+
+def get_open_spine_file(_):
+    result = open_project({})
+    if not result.get("open"):
+        return None
+    active = checked_session({"session": result["session"]})
+    source = active["source"]
+    source_stat = source.stat()
+    size = source_stat.st_size
+    if size <= 0 or size > MAX_PROJECT:
+        raise ValueError("SPINE_PROJECT_SIZE_LIMIT")
+    return {"path": str(source), "name": source.name,
+            "session": active["id"], "size": size}
+
+
+def read_project_chunk(payload):
+    active = checked_session(payload)
+    source = active["source"]
+    source_stat = source.stat()
+    if source_stat.st_size != active["source_size"] or source_stat.st_mtime_ns != active["source_mtime_ns"]:
+        raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
+    offset = payload.get("offset")
+    total = active["source_size"]
+    if not isinstance(offset, int) or offset < 0 or offset >= total:
+        raise ValueError("INVALID_PROJECT_OFFSET")
+    with source.open("rb") as handle:
+        handle.seek(offset)
+        raw = handle.read(CHUNK)
+    return {"offset": offset, "total": total,
+            "base64": base64.b64encode(raw).decode("ascii"),
+            "done": offset + len(raw) >= total}
+
+
+def get_sibling_images(payload):
+    active = checked_session(payload)
+    project_path = Path(payload.get("projectPath") or "").expanduser().resolve(strict=True)
+    if project_path != active["source"].resolve():
+        raise ValueError("PROJECT_PATH_DOES_NOT_MATCH_ACTIVE_SESSION")
+    root = active["source"].parent.resolve()
+    images = []
+    for key, candidate in active["files"].items():
+        if key == "skeleton.json":
+            continue
+        try:
+            resolved = candidate.resolve(strict=True)
+            if not resolved.is_relative_to(root) or resolved.suffix.lower() not in IMAGES:
+                continue
+            snapshot = active["file_snapshots"].get(key, {})
+            size = snapshot.get("size", resolved.stat().st_size)
+            if size <= 0 or size > MAX_PROJECT:
+                continue
+            images.append({"path": str(resolved), "name": resolved.name, "size": size})
+        except (OSError, RuntimeError):
+            continue
+    return {"session": active["id"], "images": images}
+
+
+def read_file_chunk(payload):
+    active = checked_session(payload)
+    requested = Path(payload.get("path") or "").expanduser().resolve(strict=True)
+    root = active["source"].parent.resolve()
+    if not requested.is_relative_to(root):
+        raise ValueError("FILE_OUTSIDE_ACTIVE_PROJECT")
+    matched_key = None
+    for key, candidate in active["files"].items():
+        if key == "skeleton.json":
+            continue
+        try:
+            if candidate.resolve(strict=True) == requested and requested.suffix.lower() in IMAGES:
+                matched_key = key
+                break
+        except (OSError, RuntimeError):
+            continue
+    if matched_key is None:
+        raise ValueError("FILE_NOT_REFERENCED_BY_ACTIVE_PROJECT")
+    snapshot = active["file_snapshots"].get(matched_key)
+    stat = requested.stat()
+    if not snapshot or stat.st_size != snapshot["size"] or stat.st_mtime_ns != snapshot["mtime_ns"]:
+        raise ValueError("SOURCE_IMAGE_CHANGED_RESTART_IMPORT")
+    total = snapshot["size"]
+    if total <= 0 or total > MAX_PROJECT:
+        raise ValueError("IMAGE_SIZE_LIMIT")
+    offset = payload.get("offset")
+    if not isinstance(offset, int) or offset < 0 or offset >= total:
+        raise ValueError("INVALID_IMAGE_OFFSET")
+    with requested.open("rb") as handle:
+        handle.seek(offset)
+        raw = handle.read(CHUNK)
+    return {"path": str(requested), "offset": offset, "total": total,
+            "base64": base64.b64encode(raw).decode("ascii"),
+            "done": offset + len(raw) >= total}
+
+
+def begin_resize_save(payload):
+    global resize_save_stage
+    active = checked_session(payload)
+    requested = Path(payload.get("path") or "").expanduser().resolve(strict=True)
+    if requested != active["source"].resolve():
+        raise ValueError("ONLY_THE_ACTIVE_PROJECT_CAN_BE_SAVED")
+    if hashlib.sha256(active["source"].read_bytes()).hexdigest() != active["sha256"]:
+        raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
+    size = payload.get("size")
+    if not isinstance(size, int) or size < 1 or size > MAX_OUTPUT:
+        raise ValueError("RESIZE_OUTPUT_SIZE_LIMIT")
+    project_root = active["source"].parent.resolve()
+    output_dir = project_root / "SpineResizeResults"
+    if output_dir.exists():
+        if output_dir.is_symlink() or not output_dir.resolve().is_relative_to(project_root):
+            raise ValueError("UNSAFE_RESIZE_OUTPUT_DIRECTORY")
+    else:
+        output_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
+    filename = payload.get("filename")
+    if (not isinstance(filename, str) or not filename or Path(filename).name != filename
+            or "/" in filename or "\\" in filename):
+        raise ValueError("INVALID_RESIZE_OUTPUT_FILENAME")
+    if not filename.lower().endswith(".zip") or filename in (".", ".."):
+        raise ValueError("RESIZE_OUTPUT_MUST_BE_A_ZIP_BUNDLE")
+    target = output_dir / filename
+    stem, suffix = target.stem, target.suffix
+    counter = 2
+    while target.exists():
+        target = output_dir / f"{stem}-{counter}{suffix}"
+        counter += 1
+    fd, temporary = tempfile.mkstemp(prefix=".spine-resize-", suffix=".tmp", dir=str(output_dir))
+    os.close(fd)
+    if resize_save_stage and resize_save_stage.get("temp"):
+        try:
+            resize_save_stage["temp"].unlink(missing_ok=True)
+        except OSError:
+            pass
+    resize_save_stage = {
+        "id": uuid.uuid4().hex, "session": active["id"], "source": active["source"],
+        "source_sha256": active["sha256"], "temp": Path(temporary), "target": target,
+        "expected": size, "written": 0, "created": time.time(),
+    }
+    return {"stage": resize_save_stage["id"], "path": str(target), "size": size}
+
+
+def write_resize_save_chunk(payload):
+    active = resize_save_stage
+    if not active or payload.get("stage") != active["id"]:
+        raise ValueError("INVALID_RESIZE_SAVE_STAGE")
+    if time.time() - active["created"] > 600:
+        active["temp"].unlink(missing_ok=True)
+        raise ValueError("RESIZE_SAVE_STAGE_EXPIRED")
+    offset = payload.get("offset")
+    if not isinstance(offset, int) or offset != active["written"]:
+        raise ValueError("INVALID_RESIZE_SAVE_OFFSET")
+    encoded = payload.get("base64")
+    if not isinstance(encoded, str):
+        raise ValueError("INVALID_RESIZE_SAVE_CHUNK")
+    raw = base64.b64decode(encoded, validate=True)
+    if not raw or len(raw) > CHUNK or active["written"] + len(raw) > active["expected"]:
+        raise ValueError("INVALID_RESIZE_SAVE_CHUNK_SIZE")
+    with active["temp"].open("ab") as handle:
+        handle.write(raw)
+    active["written"] += len(raw)
+    return {"written": active["written"], "expected": active["expected"]}
+
+
+def finish_resize_save(payload):
+    global resize_save_stage
+    active = resize_save_stage
+    if not active or payload.get("stage") != active["id"]:
+        raise ValueError("INVALID_RESIZE_SAVE_STAGE")
+    if active["written"] != active["expected"]:
+        raise ValueError("INCOMPLETE_RESIZE_SAVE")
+    project_session = checked_session({"session": active["session"]})
+    source_stat = project_session["source"].stat()
+    if source_stat.st_size != project_session["source_size"] or source_stat.st_mtime_ns != project_session["source_mtime_ns"]:
+        active["temp"].unlink(missing_ok=True)
+        resize_save_stage = None
+        raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
+    project_root = project_session["source"].parent.resolve()
+    output_dir = active["target"].parent
+    if output_dir.is_symlink() or not output_dir.resolve().is_relative_to(project_root):
+        active["temp"].unlink(missing_ok=True)
+        resize_save_stage = None
+        raise ValueError("UNSAFE_RESIZE_OUTPUT_DIRECTORY")
+    if active["target"].exists():
+        active["temp"].unlink(missing_ok=True)
+        resize_save_stage = None
+        raise ValueError("RESIZE_OUTPUT_ALREADY_EXISTS")
+    os.replace(active["temp"], active["target"])
+    result = {"ok": True, "path": str(active["target"])}
+    resize_save_stage = None
+    return result
+
+
 def ping(_):
     system = platform.system()
     capabilities = ["multi-slot-clipping", "weighted-clipping"]
@@ -1028,6 +1232,14 @@ def ping(_):
 
 HANDLERS = {
     "ping": ping,
+    "get_open_file_path": get_open_file_path,
+    "get_open_spine_file": get_open_spine_file,
+    "read_project_chunk": read_project_chunk,
+    "get_sibling_images": get_sibling_images,
+    "read_file_chunk": read_file_chunk,
+    "begin_resize_save": begin_resize_save,
+    "write_resize_save_chunk": write_resize_save_chunk,
+    "finish_resize_save": finish_resize_save,
     "open_project": open_project,
     "choose_project": choose_project,
     "begin_import": begin_import,

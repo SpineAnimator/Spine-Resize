@@ -1,4 +1,4 @@
-// Background service worker: talks to native messaging host "spinebridge".
+// Both Resize and Mask use the same project-scoped Native Messaging host.
 let nativePort = null;
 let nextId = 1;
 const pending = new Map();
@@ -6,7 +6,7 @@ const pending = new Map();
 function ensurePort() {
   if (nativePort) return nativePort;
   try {
-    nativePort = chrome.runtime.connectNative("spinebridge");
+    nativePort = chrome.runtime.connectNative("spinemaskbridge");
     nativePort.onMessage.addListener((msg) => {
       const p = pending.get(msg.id);
       if (p) {
@@ -26,16 +26,27 @@ function ensurePort() {
   return nativePort;
 }
 
-async function callNative(method, params) {
+async function callNative(method, params, timeoutMs = 45000) {
   const port = ensurePort();
   if (!port) throw new Error("native host not available");
   const id = nextId++;
-  const p = new Promise((resolve, reject) => { pending.set(id, { resolve, reject }); });
-  port.postMessage({ id, method, params });
-  return Promise.race([
-    p,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("native timeout")), 8000))
-  ]);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(new Error("native timeout"));
+    }, timeoutMs);
+    pending.set(id, {
+      resolve: (value) => { clearTimeout(timer); resolve(value); },
+      reject: (error) => { clearTimeout(timer); reject(error); }
+    });
+    try {
+      port.postMessage({ id, method, params });
+    } catch (error) {
+      clearTimeout(timer);
+      pending.delete(id);
+      reject(error);
+    }
+  });
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -48,19 +59,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           result = await callNative("get_open_file_path", {});
           break;
         case "GET_OPEN_SPINE_FILE":
-          result = await callNative("get_open_spine_file", {});
+          result = await callNative("get_open_spine_file", {}, 120000);
           break;
         case "GET_SIBLING_IMAGES":
-          result = await callNative("get_sibling_images", { projectPath: msg.projectPath });
+          result = await callNative("get_sibling_images", { projectPath: msg.projectPath, session: msg.session });
           break;
-        case "READ_FILE":
-          result = await callNative("read_file", { path: msg.path });
+        case "READ_PROJECT_CHUNK":
+          result = await callNative("read_project_chunk", { session: msg.session, offset: msg.offset });
           break;
-        case "SAVE_FILE":
-          result = await callNative("save_file", { path: msg.path, bytes: Array.from(msg.bytes) });
+        case "READ_FILE_CHUNK":
+          result = await callNative("read_file_chunk", { session: msg.session, path: msg.path, offset: msg.offset });
+          break;
+        case "BEGIN_SAVE":
+          result = await callNative("begin_resize_save", { session: msg.session, path: msg.path, size: msg.size, filename: msg.filename });
+          break;
+        case "WRITE_SAVE_CHUNK":
+          result = await callNative("write_resize_save_chunk", { stage: msg.stage, offset: msg.offset, base64: msg.base64 });
+          break;
+        case "FINISH_SAVE":
+          result = await callNative("finish_resize_save", { stage: msg.stage });
           break;
         case "PING":
-          result = await callNative("get_open_file_path", {});
+          result = await callNative("ping", {});
           break;
         default:
           throw new Error("unknown method " + msg.type);
@@ -73,7 +93,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-// Separate locked-down Spine Mask host, never the legacy arbitrary file bridge.
+// Mask page requests use a separate connection to the same locked-down host.
 const MASK_ROOT="https://spineanimator.github.io/Spine-Mask-Tool/";
 const MASK_METHODS=new Set(["ping","open_project","choose_project","begin_import","import_chunk","finish_import","read_import_chunk","read_chunk","begin_result","write_chunk","commit_result"]);
 let maskPort=null, maskNextId=1;

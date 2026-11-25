@@ -3,11 +3,17 @@ on:
   pull_request:
     paths:
       - spine-bridge/**
+      - app.js
+      - index.html
+      - INSTALL_BRIDGE.md
       - .github/workflows/spine-mask-bridge-platform-tests.yml
   push:
     branches: [main]
     paths:
       - spine-bridge/**
+      - app.js
+      - index.html
+      - INSTALL_BRIDGE.md
       - .github/workflows/spine-mask-bridge-platform-tests.yml
 permissions:
   contents: read
@@ -29,6 +35,13 @@ jobs:
       - name: Test explicit project discovery and native host contracts
         run: |
           python spine-bridge/test_spinemask_platforms.py
+      - name: Check Resize page and extension bridge JavaScript syntax
+        run: |
+          node --check app.js
+          node --check spine-bridge/background.js
+          node --check spine-bridge/content.js
+          node --check spine-bridge/mask-content.js
+          node --test spine-bridge/test_spine_resize_content_bridge.mjs
       - name: Test native messaging and privacy regression suite on Linux
         if: runner.os == 'Linux'
         run: python spine-bridge/test_spinemaskbridge.py

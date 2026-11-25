@@ -1,6 +1,6 @@
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Install Spine Mask Bridge
+Name=Install Spine Mask + Resize Bridge
 Exec=sh -c 'cd "$(dirname "$1")" && exec ./linux/SpineMaskInstaller' sh "%k"
 Terminal=false
