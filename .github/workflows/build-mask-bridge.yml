@@ -38,6 +38,11 @@ jobs:
             --add-binary "dist/spinemaskbridge.exe;." `
             spine-bridge/launch_spinemask_portable.py
           if (-not (Test-Path "dist/SpineMaskInstaller.exe")) { throw "One-click Windows installer missing" }
+      - name: Verify Windows installer executable starts without Python or a terminal
+        shell: pwsh
+        run: |
+          & "dist/SpineMaskInstaller.exe" --help
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer startup check failed" }
       - name: Verify Windows Native Messaging stdio ping
         shell: pwsh
         run: |
@@ -91,6 +96,24 @@ jobs:
             spine-bridge/launch_spinemask_portable.py
           test -x dist/spinemaskbridge
           test -x dist/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller
+      - name: Verify macOS native host protocol and installer startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,struct,subprocess
+          msg=json.dumps({"id":1,"method":"ping","params":{}}).encode()
+          frame=struct.pack("<I",len(msg))+msg
+          p=subprocess.run(["dist/spinemaskbridge"],input=frame,capture_output=True,timeout=25)
+          assert p.returncode==0,f"macOS host exited {p.returncode}"
+          assert len(p.stdout)>=4,"macOS host returned no frame"
+          size=struct.unpack("<I",p.stdout[:4])[0]
+          result=json.loads(p.stdout[4:4+size])
+          assert result["result"]["protocol"]=="spinemask/1",result
+          print("SPINE_MASK_MACOS_NATIVE_PING_PASS")
+          PY
+          dist/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller --help >/dev/null 2>&1
+          echo "SPINE_MASK_MACOS_INSTALLER_STARTUP_PASS"
       - uses: actions/upload-artifact@v4
         with:
           name: spinemaskbridge-macos
@@ -129,6 +152,24 @@ jobs:
             spine-bridge/launch_spinemask_portable.py
           test -x dist/spinemaskbridge
           test -x dist/SpineMaskInstaller
+      - name: Verify Linux native host protocol and installer startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,struct,subprocess
+          msg=json.dumps({"id":1,"method":"ping","params":{}}).encode()
+          frame=struct.pack("<I",len(msg))+msg
+          p=subprocess.run(["dist/spinemaskbridge"],input=frame,capture_output=True,timeout=25)
+          assert p.returncode==0,f"Linux host exited {p.returncode}"
+          assert len(p.stdout)>=4,"Linux host returned no frame"
+          size=struct.unpack("<I",p.stdout[:4])[0]
+          result=json.loads(p.stdout[4:4+size])
+          assert result["result"]["protocol"]=="spinemask/1",result
+          print("SPINE_MASK_LINUX_NATIVE_PING_PASS")
+          PY
+          dist/SpineMaskInstaller --help >/dev/null 2>&1
+          echo "SPINE_MASK_LINUX_INSTALLER_STARTUP_PASS"
       - uses: actions/upload-artifact@v4
         with:
           name: spinemaskbridge-linux
