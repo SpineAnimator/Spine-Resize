@@ -25,7 +25,8 @@ PNG = base64.b64decode(
 
 
 def build_json():
-    return {"skeleton":{"spine":"4.3.26","width":12,"height":12},
+    return {"skeleton":{"spine":"4.3.26","width":12,"height":12,
+                        "images":"/original/machine/sym_crown/images/"},
             "bones":[{"name":"root"}],
             "slots":[{"name":"original","bone":"root","attachment":"face"}],
             "skins":[{"name":"default","attachments":{
@@ -215,6 +216,8 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertEqual((folder/"images"/"nested"/"future-glow.webp").read_bytes(),
                          (self.root/"images"/"nested"/"future-glow.webp").read_bytes())
         exported=json.loads((folder/"scene-mask.json").read_text())
+        self.assertEqual(exported["skeleton"]["images"], "./images/",
+                         "native output must not retain the source machine's absolute texture path")
         self.assertEqual(len(exported["slots"]),2)
         self.assertEqual(exported["slots"][1]["name"],"original")
         self.assertEqual(exported["skins"][0]["attachments"]["auto_mask_original"]["clip"]["end"],"original")

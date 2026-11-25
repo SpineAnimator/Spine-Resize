@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import shlex
 import shutil
 import struct
 import subprocess
@@ -77,7 +78,102 @@ def editor_cli():
     return next((str(c.resolve()) for c in candidates if c.is_file()), None)
 
 
+def configured_editor_project():
+    """Resolve an explicit project path supplied by a local user or CI agent."""
+    configured = os.environ.get("SPINE_MASK_PROJECT_PATH", "").strip()
+    if not configured:
+        return None, None
+    try:
+        project = Path(configured).expanduser().resolve(strict=True)
+        if project.is_file() and project.suffix.lower() in KINDS and project.stat().st_size <= MAX_PROJECT:
+            return project, "environment"
+    except (OSError, RuntimeError):
+        pass
+    return None, "configured_project_not_found"
+
+
+def project_from_editor_args(arguments):
+    """Return a unique existing Spine project passed to the running GUI process."""
+    args = [str(value) for value in arguments]
+    if not args or any(value in ("--input", "--output", "--export", "--import") for value in args):
+        return None
+    found = set()
+    for value in args[1:]:
+        if not value or value.startswith("-"):
+            continue
+        try:
+            candidate = Path(value).expanduser()
+            if candidate.suffix.lower() in KINDS and candidate.is_file() and candidate.stat().st_size <= MAX_PROJECT:
+                found.add(candidate.resolve())
+        except (OSError, RuntimeError):
+            continue
+    return next(iter(found)) if len(found) == 1 else None
+
+
+def windows_command_line_args(command_line):
+    """Parse a Windows process command line without shell execution."""
+    try:
+        return [value.strip('"') for value in shlex.split(str(command_line), posix=False)]
+    except ValueError:
+        return []
+
+
+def editor_process_projects():
+    """Read project arguments from running Spine GUI processes on Linux/Windows."""
+    system = platform.system()
+    projects = set()
+    if system == "Linux":
+        proc = Path("/proc")
+        try:
+            entries = list(proc.iterdir())
+        except OSError:
+            return projects
+        for entry in entries:
+            if not entry.name.isdigit():
+                continue
+            try:
+                raw = (entry / "cmdline").read_bytes()
+                args = [os.fsdecode(value) for value in raw.split(b"\0") if value]
+                joined = " ".join(args).casefold()
+                if "spine" not in joined or "spinemaskbridge" in joined:
+                    continue
+                if any(flag in args for flag in ("--input", "--export", "--import")):
+                    continue
+                candidate = project_from_editor_args(args)
+                if candidate:
+                    projects.add(candidate)
+            except OSError:
+                continue
+    elif system == "Windows":
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if not powershell:
+            return projects
+        script = (
+            "$items = @(Get-CimInstance Win32_Process | "
+            "Where-Object { $_.Name -eq 'Spine.exe' -or $_.Name -eq 'Spine.com' } | "
+            "ForEach-Object { $_.CommandLine }); "
+            "ConvertTo-Json -InputObject $items -Compress"
+        )
+        try:
+            result = subprocess.run([powershell, "-NoProfile", "-Command", script],
+                                    capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                commands = json.loads(result.stdout)
+                if isinstance(commands, str):
+                    commands = [commands]
+                for command in commands if isinstance(commands, list) else []:
+                    candidate = project_from_editor_args(windows_command_line_args(command))
+                    if candidate:
+                        projects.add(candidate)
+        except (OSError, subprocess.TimeoutExpired, ValueError, json.JSONDecodeError):
+            pass
+    return projects
+
+
 def spine_open_path():
+    configured, configured_reason = configured_editor_project()
+    if configured_reason:
+        return configured, configured_reason
     # macOS direct query is advisory; not all Spine editions expose documents.
     if platform.system() == "Darwin":
         command = ('tell application "Spine"\n'
@@ -98,17 +194,39 @@ def spine_open_path():
     # Unlike a general Downloads scanner, only a unique recently modified
     # Spine project while Spine is running qualifies. No unrelated file picked.
     try:
-        if platform.system() != "Windows":
+        if platform.system() == "Windows":
+            running = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Spine.exe"],
+                                     capture_output=True, text=True, timeout=3).stdout.lower().count("spine.exe") > 0
+        elif platform.system() == "Darwin":
             running = subprocess.run(["pgrep", "-f", "(Spine.app|Spine.sh|Spine.exe)"],
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                      timeout=3).returncode == 0
         else:
-            running = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Spine.exe"],
-                                     capture_output=True, text=True, timeout=3).stdout.lower().count("spine.exe") > 0
+            running = False
+            for process in Path("/proc").iterdir():
+                if not process.name.isdigit():
+                    continue
+                try:
+                    command = " ".join(os.fsdecode(value) for value in
+                                       (process / "cmdline").read_bytes().split(bytes([0])) if value).casefold()
+                    if "spine" in command and "spinemaskbridge" not in command and not any(
+                        flag in command for flag in (" --input ", " --export ", " --import ")
+                    ):
+                        running = True
+                        break
+                except OSError:
+                    continue
     except (OSError, subprocess.TimeoutExpired):
         running = False
     if not running:
         return None, "editor_not_detected"
+    # Resolve the actual document passed to the running GUI process.
+    if platform.system() in ("Linux", "Windows"):
+        projects = editor_process_projects()
+        if len(projects) == 1:
+            return projects.pop(), "editor_process_argument"
+        if len(projects) > 1:
+            return None, "multiple_editor_projects_choose_file"
     # On macOS/Linux an editor may keep its project file descriptor open.
     # Prefer that explicit process handle over guessing by file modification.
     if platform.system() != "Windows" and shutil.which("lsof"):
@@ -183,6 +301,11 @@ def spine_open_path():
                 return None, "multiple_editor_launch_projects"
         except (OSError, subprocess.TimeoutExpired, ValueError):
             pass
+    # The most recently opened project is a safe fallback only while the
+    # Spine Editor process is running. This covers projects opened from File > Open.
+    recent = recent_editor_project()
+    if recent is not None:
+        return recent, "editor_recent_project"
     # Fail closed rather than guessing a project by mtime or another app.
     return None, "choose_project_required"
 
@@ -489,27 +612,38 @@ def copy_local_project_assets(project, dest):
 
 
 def recent_editor_project():
-    """The actual path Spine has recorded after loading a project (macOS).
-
-    The Spine 4.3 recent-file list uses its own settings syntax rather than
-    strict JSON. Reading only its first projectFile entry avoids selecting
-    unrelated desktop or recent files. No paths are sent to a website.
-    """
-    settings = Path.home() / "Library/Application Support/Spine/settings/recent-1.json"
-    try:
-        content = settings.read_text(encoding="utf-8")
-        section = content.split("recentFiles:", 1)[1]
-        section = section.split("projectFile:", 1)[1][:20000]
-        match = re.search(
-            r'paths\s*:\s*\[\s*\{\s*path\s*:\s*"((?:\\.|[^"\\])*)"',
-            section
-        )
-        if not match:
-            return None
-        path = Path(json.loads('"' + match.group(1) + '"')).expanduser()
-        return path.resolve() if path.is_file() else None
-    except (OSError, ValueError, IndexError, json.JSONDecodeError):
-        return None
+    """Read Spine's last-opened project path from its per-user settings."""
+    configured = os.environ.get("SPINE_MASK_RECENT_FILE", "").strip()
+    if configured:
+        candidates = [Path(configured).expanduser()]
+    elif platform.system() == "Darwin":
+        candidates = [Path.home() / "Library/Application Support/Spine/settings/recent-1.json"]
+    elif platform.system() == "Windows":
+        appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData/Roaming"))
+        candidates = [appdata / "Spine/settings/recent-1.json"]
+    else:
+        config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        candidates = [
+            config / "Spine/settings/recent-1.json",
+            Path.home() / ".local/share/Spine/settings/recent-1.json",
+        ]
+    for settings in candidates:
+        try:
+            content = settings.read_text(encoding="utf-8")
+            section = content.split("recentFiles:", 1)[1]
+            section = section.split("projectFile:", 1)[1][:20000]
+            match = re.search(
+                r'paths\s*:\s*\[\s*\{\s*path\s*:\s*"((?:\\.|[^"\\])*)"',
+                section
+            )
+            if not match:
+                continue
+            path = Path(json.loads('"' + match.group(1) + '"')).expanduser()
+            if path.is_file() and path.suffix.lower() in KINDS and path.stat().st_size <= MAX_PROJECT:
+                return path.resolve()
+        except (OSError, ValueError, IndexError, json.JSONDecodeError):
+            continue
+    return None
 
 
 def wait_for_editor_open(project, seconds=12):
@@ -653,6 +787,10 @@ def commit_result(payload):
     if any(stage["written"][name] != length for name, length in stage["lengths"].items()):
         raise ValueError("INCOMPLETE_OUTPUT")
     updated = json.loads((stage["temp"] / "mask.json").read_text(encoding="utf-8"))
+    if isinstance(updated.get("skeleton"), dict):
+        # The result folder contains a complete local images/ tree. Never keep
+        # the source machine's absolute images path in a portable Spine project.
+        updated["skeleton"]["images"] = "./images/"
     if not isinstance(updated.get("slots"), list) or not updated.get("skins"):
         raise ValueError("INVALID_SPINE_JSON")
     clips = []
