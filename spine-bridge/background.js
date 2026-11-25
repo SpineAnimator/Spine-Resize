@@ -6,7 +6,7 @@ const pending = new Map();
 function ensurePort() {
   if (nativePort) return nativePort;
   try {
-    nativePort = chrome.runtime.connectNative("spinebridge");
+    nativePort = chrome.runtime.connectNative("spinemaskbridge");
     nativePort.onMessage.addListener((msg) => {
       const p = pending.get(msg.id);
       if (p) {
@@ -34,7 +34,7 @@ async function callNative(method, params) {
   port.postMessage({ id, method, params });
   return Promise.race([
     p,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("native timeout")), 8000))
+    new Promise((_, reject) => setTimeout(() => reject(new Error("native timeout")), 45000))
   ]);
 }
 
@@ -51,13 +51,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           result = await callNative("get_open_spine_file", {});
           break;
         case "GET_SIBLING_IMAGES":
-          result = await callNative("get_sibling_images", { projectPath: msg.projectPath });
+          result = await callNative("get_sibling_images", { projectPath: msg.projectPath, session: msg.session });
           break;
-        case "READ_FILE":
-          result = await callNative("read_file", { path: msg.path });
+        case "READ_PROJECT_CHUNK":
+          result = await callNative("read_project_chunk", { session: msg.session, offset: msg.offset });
           break;
-        case "SAVE_FILE":
-          result = await callNative("save_file", { path: msg.path, bytes: Array.from(msg.bytes) });
+        case "READ_FILE_CHUNK":
+          result = await callNative("read_file_chunk", { session: msg.session, path: msg.path, offset: msg.offset });
+          break;
+        case "BEGIN_SAVE":
+          result = await callNative("begin_resize_save", { session: msg.session, path: msg.path, size: msg.size });
+          break;
+        case "WRITE_SAVE_CHUNK":
+          result = await callNative("write_resize_save_chunk", { stage: msg.stage, offset: msg.offset, base64: msg.base64 });
+          break;
+        case "FINISH_SAVE":
+          result = await callNative("finish_resize_save", { stage: msg.stage });
           break;
         case "PING":
           result = await callNative("get_open_file_path", {});
