@@ -241,12 +241,12 @@ def create_shortcut(home):
         desktop.parent.mkdir(parents=True, exist_ok=True)
         if getattr(sys, "frozen", False):
             target = home / "SpineMaskInstaller"
-            command = "Exec=\"" + str(target) + "\"\\nTerminal=false\\n"
+            command = "Exec=\"" + str(target) + "\"\nTerminal=false\n"
         else:
             script = home / "launch_spinemask_portable.py"
-            command = "Exec=python3 \"" + str(script) + "\" --launch\\nTerminal=true\\n"
+            command = "Exec=python3 \"" + str(script) + "\" --launch\nTerminal=true\n"
         desktop.write_text(
-            "[Desktop Entry]\\nType=Application\\nName=Spine Mask Tool\\n" + command,
+            "[Desktop Entry]\nType=Application\nName=Spine Mask Tool\n" + command,
             encoding="utf-8"
         )
         desktop.chmod(0o700)
