@@ -69,7 +69,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           result = await callNative("finish_resize_save", { stage: msg.stage });
           break;
         case "PING":
-          result = await callNative("get_open_file_path", {});
+          result = await callNative("ping", {});
           break;
         default:
           throw new Error("unknown method " + msg.type);
