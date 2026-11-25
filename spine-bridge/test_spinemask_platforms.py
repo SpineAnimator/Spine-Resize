@@ -101,6 +101,26 @@ class EditorDiscoveryTests(unittest.TestCase):
         self.assertEqual(len(first), 32)
         self.assertTrue(all("a" <= char <= "p" for char in first))
 
+    def test_recent_project_default_locations_match_each_spine_platform(self):
+        cases = [
+            ("Darwin", Path("Library/Application Support/Spine/settings/recent-1.json")),
+            ("Windows", Path("Spine/settings/recent-1.json")),
+            ("Linux", Path(".spine/settings/recent-1.json")),
+        ]
+        for system, relative in cases:
+            with self.subTest(system=system):
+                settings = Path(self.tmp.name) / relative
+                settings.parent.mkdir(parents=True, exist_ok=True)
+                settings.write_text(
+                    'recentFiles: { projectFile: { paths: [{ path: "' +
+                    json.dumps(str(self.project))[1:-1] + '" }] } }',
+                    encoding="utf-8",
+                )
+                with patch.object(host.platform, "system", return_value=system), \
+                     patch.object(Path, "home", return_value=Path(self.tmp.name)), \
+                     patch.dict(os.environ, {}, clear=True):
+                    self.assertEqual(host.recent_editor_project(), self.project.resolve())
+
     def test_explicit_path_rejects_unsupported_file_types(self):
         unsupported = Path(self.tmp.name) / "notes.txt"
         unsupported.write_text("not a Spine project", encoding="utf-8")
