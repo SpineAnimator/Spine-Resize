@@ -4,13 +4,13 @@
 
 Download and extract `Spine-Mask-Resize-Bridge.zip`, then double-click the installer for your operating system:
 
-- **macOS:** `INSTALL.command` (Finder opens the installer; you do not type commands)
-- **Windows:** `INSTALL.bat` (starts the bundled `SpineMaskInstaller.exe`)
-- **Linux:** `INSTALL.sh` (run from the file manager)
+- **macOS:** `INSTALL.command` (opens the bundled `macos/SpineMaskInstaller.app`)
+- **Windows:** `INSTALL.bat` (starts `windows/SpineMaskInstaller.exe`)
+- **Linux:** double-click `INSTALL.desktop` (or use `INSTALL.sh` as a fallback)
 
-The installer creates a per-user Spine Mask Bridge folder, registers the least-privilege Native Messaging host, downloads the official Google Chrome for Testing browser if needed, and opens a dedicated browser profile with the extension already loaded. It does not change the user's normal Chrome profile or install an unsigned extension into the user's everyday browser.
+The installer is a self-contained native app for each OS; Python and terminal commands are not required. It creates a per-user Spine Mask Bridge folder, registers the least-privilege Native Messaging host, downloads the official Google Chrome for Testing browser if needed, and opens a dedicated browser profile with the extension already loaded. It does not change the user's normal Chrome profile or install an unsigned extension into the user's everyday browser.
 
-The first setup downloads Chrome for Testing and may take a few minutes. Keep the extracted installer folder until setup has completed. After installation, use the **Spine Mask Tool.app** shortcut on macOS, the copied `SpineMaskInstaller.exe` on Windows, or the desktop shortcut on Linux to reopen the dedicated browser.
+The first setup downloads Chrome for Testing and may take a few minutes. Keep the extracted installer folder until setup has completed. After installation, use the **Spine Mask Tool.app** shortcut on macOS, the **Spine Mask Tool** desktop shortcut on Windows or Linux to reopen the dedicated browser. macOS Gatekeeper or Windows SmartScreen may show the operating system's standard confirmation because the installers are not signed with a paid publisher certificate.
 
 ## Headless Linux CI and coding agents
 
