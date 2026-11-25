@@ -1117,8 +1117,13 @@ def begin_resize_save(payload):
     size = payload.get("size")
     if not isinstance(size, int) or size < 1 or size > MAX_OUTPUT:
         raise ValueError("RESIZE_OUTPUT_SIZE_LIMIT")
-    output_dir = active["source"].parent / "SpineResizeResults"
-    output_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    project_root = active["source"].parent.resolve()
+    output_dir = project_root / "SpineResizeResults"
+    if output_dir.exists():
+        if output_dir.is_symlink() or not output_dir.resolve().is_relative_to(project_root):
+            raise ValueError("UNSAFE_RESIZE_OUTPUT_DIRECTORY")
+    else:
+        output_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
     base = active["source"].stem + ".resized" + active["source"].suffix
     target = output_dir / base
     counter = 2
