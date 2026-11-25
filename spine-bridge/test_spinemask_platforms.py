@@ -68,11 +68,11 @@ class EditorDiscoveryTests(unittest.TestCase):
     def test_recent_project_parser_accepts_yaml_list_and_unquoted_paths_with_spaces(self):
         recent = Path(self.tmp.name) / "recent-1.json"
         recent.write_text(
-            "recentFiles:\\n  projectFile:\\n    paths:\\n"
-            "      - path: " + str(self.project) + "\\n",
+            "recentFiles:\n  projectFile:\n    paths:\n"
+            "      - path: " + str(self.project) + "\n",
             encoding="utf-8",
         )
-        with patch.object(host.platform, "system", return_value="Linux"), \\
+        with patch.object(host.platform, "system", return_value="Linux"), \
              patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
             self.assertEqual(host.recent_editor_project(), self.project.resolve())
 
@@ -81,7 +81,7 @@ class EditorDiscoveryTests(unittest.TestCase):
         recent.write_text(json.dumps({
             "recentFiles": {"projectFile": {"paths": [{"path": str(self.project)}]}}
         }), encoding="utf-8")
-        with patch.object(host.platform, "system", return_value="Linux"), \\
+        with patch.object(host.platform, "system", return_value="Linux"), \
              patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
             self.assertEqual(host.recent_editor_project(), self.project.resolve())
 
