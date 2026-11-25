@@ -82,7 +82,7 @@ jobs:
           for asset in manifest.json background.js mask-content.js content.js \
             popup.html popup.js icon_16.png icon_48.png icon_128.png \
             spinemaskbridge.py install_spinemask_host.py launch_spinemask_mac.py \
-            launch_spinemask_portable.py install_spinemask_linux.sh \
+            launch_spinemask_portable.py agent_cli.py README.md install_spinemask_linux.sh \
             INSTALL.command INSTALL.sh INSTALL.bat; do
             test -s "spine-bridge/$asset"
             cp "spine-bridge/$asset" "dist/spine-mask-resize-bridge/$asset"
@@ -96,12 +96,14 @@ jobs:
           node --check dist/spine-mask-resize-bridge/mask-content.js
           python3 - <<'PY'
           from pathlib import Path
-          for name in ('spinemaskbridge.py','install_spinemask_host.py','launch_spinemask_mac.py','launch_spinemask_portable.py'):
+          for name in ('spinemaskbridge.py','install_spinemask_host.py','launch_spinemask_mac.py','launch_spinemask_portable.py','agent_cli.py'):
               p=Path('dist/spine-mask-resize-bridge')/name
               compile(p.read_bytes(),str(p),'exec')
           PY
           python3 spine-bridge/test_spinemaskbridge.py
+          python3 spine-bridge/test_spinemask_platforms.py
           node spine-bridge/test_mask_extension.mjs
+          bash -n spine-bridge/INSTALL.command spine-bridge/INSTALL.sh
           cd dist
           zip -q -X -r Spine-Mask-Resize-Bridge.zip spine-mask-resize-bridge
           unzip -t Spine-Mask-Resize-Bridge.zip >/dev/null
