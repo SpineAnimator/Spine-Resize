@@ -19,7 +19,7 @@ The native host can be used without Chrome or a GUI. Set the project path explic
 ```bash
 export SPINE_MASK_PROJECT_PATH=/workspace/sym_crown/sym_wild.spine
 export SPINE_MASK_EDITOR_CLI=/opt/Spine/Spine.sh
-export SPINE_LICENSE="$SPINE_LICENSE" # inject from your CI secret store; never commit it
+# Inject SPINE_LICENSE from your CI secret store as a masked environment variable; never commit it.
 
 # Read the project inventory and exact region texture list.
 python3 spine-bridge/agent_cli.py inspect
