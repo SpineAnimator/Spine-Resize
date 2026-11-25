@@ -9096,37 +9096,40 @@ window.boneHierarchy = boneHierarchy;
 
   async function bridgeLoad() {
     if (typeof window.spineBridge === 'undefined' || !window.spineBridge) {
-      line.textContent = 'Spine bridge not found. Install the Spine Resize Bridge extension and restart Spine.';
-      return false;
+      return { ok: false, reason: 'missing' };
     }
     try {
       const info = await window.spineBridge.getOpenSpineFile();
-      if (!info || !info.data || !info.data.length) return false;
+      if (!info || !info.data || !info.data.length) {
+        return { ok: false, reason: 'no-project' };
+      }
       bridgeProjectPath = info.path;
       bridgeOriginalName = info.path.replace(/\\/g, '/').split('/').pop();
       const ext = (bridgeOriginalName.split('.').pop() || '').toLowerCase();
       bridgeIsSpine = (ext === 'spine' || ext === 'skel' || ext === 'bytes');
       const file = new File([new Uint8Array(info.data)], bridgeOriginalName, { type: 'application/octet-stream' });
       add([file]);
-      try {
-        const imgs = await window.spineBridge.getSiblingImages(info.path);
-        if (imgs && imgs.length) {
-          const dtFiles = [];
-          for (const im of imgs) {
-            const r = await window.spineBridge.readFileByPath(im.path);
-            if (r && r.data) dtFiles.push(new File([new Uint8Array(r.data)], im.name, { type: 'application/octet-stream' }));
-          }
-          if (dtFiles.length) add(dtFiles);
+
+      const imgs = await window.spineBridge.getSiblingImages(info.path);
+      if (!Array.isArray(imgs)) throw new Error('Bridge returned an invalid project image list');
+      const dtFiles = [];
+      for (const im of imgs) {
+        const image = await window.spineBridge.readFileByPath(im.path);
+        if (!image || !Array.isArray(image.data) || !image.data.length) {
+          throw new Error('Could not read referenced Spine image: ' + im.name);
         }
-      } catch (e) { /* ignore image fetch errors */ }
+        dtFiles.push(new File([new Uint8Array(image.data)], im.name, { type: 'application/octet-stream' }));
+      }
+      if (dtFiles.length) add(dtFiles);
+
       go.disabled = false;
       go.classList.remove('btn');
       go.classList.add('btn', 'white');
       const ws = document.getElementById('with_spine');
       if (ws) ws.remove();
-      return true;
-    } catch (e) {
-      return false;
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, reason: 'error', error: String(error?.message || error) };
     }
   }
 
@@ -9147,32 +9150,36 @@ window.boneHierarchy = boneHierarchy;
     withSpineBtn.addEventListener('click', async function() {
       withSpineBtn.disabled = true;
       try {
-        const ok = await bridgeLoad();
-        if (!ok) {
-          // Auto-download the installer
-          const installerLink = document.createElement('a');
-          installerLink.href = 'https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Resize-Bridge.zip';
-          installerLink.download = 'Spine-Mask-Resize-Bridge.zip';
-          installerLink.style.display = 'none';
-          document.body.appendChild(installerLink);
-          installerLink.click();
-          document.body.removeChild(installerLink);
-          
-          // Also show guide link as fallback
-          const guideLink = document.createElement('a');
-          guideLink.href = 'INSTALL_BRIDGE.md';
-          guideLink.target = '_blank';
-          guideLink.textContent = 'One-click installation guide';
-          guideLink.style.color = '#6bb3ff';
-          guideLink.style.textDecoration = 'underline';
-          guideLink.style.cursor = 'pointer';
-          guideLink.style.marginLeft = '8px';
-          
-          line.textContent = '';
-          line.appendChild(document.createTextNode('Bridge is not connected. Downloading the one-click installer... '));
-          line.appendChild(guideLink);
-          line.appendChild(document.createTextNode(' — extract the ZIP and open INSTALL.command (macOS), INSTALL.bat (Windows), or INSTALL.desktop (Linux). No terminal or Python is needed.'));
-          
+        const state = await bridgeLoad();
+        if (!state.ok) {
+          const hostMissing = state.reason === 'missing' ||
+            /native messaging host.*not found|specified native messaging host not found/i.test(state.error || '');
+          if (hostMissing) {
+            const installerLink = document.createElement('a');
+            installerLink.href = 'https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Resize-Bridge.zip';
+            installerLink.download = 'Spine-Mask-Resize-Bridge.zip';
+            installerLink.style.display = 'none';
+            document.body.appendChild(installerLink);
+            installerLink.click();
+            document.body.removeChild(installerLink);
+
+            const guideLink = document.createElement('a');
+            guideLink.href = 'INSTALL_BRIDGE.md';
+            guideLink.target = '_blank';
+            guideLink.textContent = 'One-click installation guide';
+            guideLink.style.color = '#6bb3ff';
+            guideLink.style.textDecoration = 'underline';
+            guideLink.style.cursor = 'pointer';
+            guideLink.style.marginLeft = '8px';
+
+            line.textContent = '';
+            line.appendChild(document.createTextNode('Bridge installer downloaded. Extract the ZIP and open INSTALL.command (macOS), INSTALL.bat (Windows), or INSTALL.desktop (Linux). No terminal or Python is needed. '));
+            line.appendChild(guideLink);
+          } else if (state.reason === 'no-project') {
+            line.textContent = 'No saved Spine project found. Open and save a project in Spine, then try again.';
+          } else {
+            line.textContent = 'Spine Bridge error: ' + (state.error || 'Unknown error');
+          }
           withSpineBtn.disabled = false;
           return;
         }
