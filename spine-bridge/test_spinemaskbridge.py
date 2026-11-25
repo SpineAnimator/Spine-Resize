@@ -574,7 +574,6 @@ class SpineResizeAdapterTests(unittest.TestCase):
 
 
     def test_linux_open_editor_uses_spine_recent_project_when_gui_has_no_launch_argument(self):
-        self.mock.stop()
         config = self.root / ".config"
         settings = config / "Spine" / "settings" / "recent-1.json"
         settings.parent.mkdir(parents=True)
