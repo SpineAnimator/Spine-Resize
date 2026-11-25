@@ -268,8 +268,7 @@ def main():
         home, extension, profile, identifier = install_bundle()
         binary = ensure_browser(home)
         shortcut = create_shortcut(home)
-        if args.launch or True:
-            launch_browser(binary, profile, extension)
+        launch_browser(binary, profile, extension)
         notify("Spine Mask Tool", "Bridge installed and ready.\nExtension ID: " + identifier +
                "\nShortcut: " + str(shortcut) + "\nThe dedicated browser is opening.")
     except Exception as error:
