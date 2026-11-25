@@ -19,6 +19,7 @@ The native host can be used without Chrome or a GUI. Set the project path explic
 ```bash
 export SPINE_MASK_PROJECT_PATH=/workspace/sym_crown/sym_wild.spine
 export SPINE_MASK_EDITOR_CLI=/opt/Spine/Spine.sh
+export SPINE_LICENSE="$SPINE_LICENSE" # inject from your CI secret store; never commit it
 
 # Read the project inventory and exact region texture list.
 python3 spine-bridge/agent_cli.py inspect
@@ -33,7 +34,7 @@ python3 spine-bridge/agent_cli.py apply /workspace/job/mask.json
 
 `agent_cli.py` supports `inspect`, `extract` and `apply`. The original project is not overwritten. `apply` validates the mask, writes a separate result, and imports it with the installed licensed Spine Editor. On Linux/Windows it does not launch a second GUI editor process.
 
-`SPINE_MASK_RECENT_FILE` can override the per-user Spine recent-project settings file when a deployment uses a custom settings location. `SPINE_MASK_PROJECT_PATH` takes precedence and is the recommended deterministic input for CI agents.
+`SPINE_LICENSE` is read only by the local Spine CLI subprocess for headless CI activation and is never logged. `SPINE_MASK_RECENT_FILE` can override the per-user Spine recent-project settings file when a deployment uses a custom settings location. `SPINE_MASK_PROJECT_PATH` takes precedence and is the recommended deterministic input for CI agents.
 
 ## Security and platform notes
 
