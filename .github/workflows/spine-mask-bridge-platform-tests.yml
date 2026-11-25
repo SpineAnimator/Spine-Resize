@@ -32,3 +32,91 @@ jobs:
       - name: Test native messaging and privacy regression suite on Linux
         if: runner.os == 'Linux'
         run: python spine-bridge/test_spinemaskbridge.py
+
+  windows-one-click-installer:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build Windows native host and one-click installer
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller==6.16.0
+          python -m PyInstaller --noconfirm --clean --onefile --console --name spinemaskbridge spine-bridge/spinemaskbridge.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SpineMaskInstaller --hidden-import tkinter --hidden-import tkinter.messagebox `
+            --add-data "spine-bridge/manifest.json;assets" `
+            --add-data "spine-bridge/background.js;assets" `
+            --add-data "spine-bridge/content.js;assets" `
+            --add-data "spine-bridge/mask-content.js;assets" `
+            --add-data "spine-bridge/popup.html;assets" `
+            --add-data "spine-bridge/popup.js;assets" `
+            --add-data "spine-bridge/icon_16.png;assets" `
+            --add-data "spine-bridge/icon_48.png;assets" `
+            --add-data "spine-bridge/icon_128.png;assets" `
+            --add-binary "dist/spinemaskbridge.exe;." `
+            spine-bridge/launch_spinemask_portable.py
+          if (-not (Test-Path "dist/spinemaskbridge.exe")) { throw "Native host build failed" }
+          if (-not (Test-Path "dist/SpineMaskInstaller.exe")) { throw "One-click installer build failed" }
+
+  macos-one-click-installer:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build standalone macOS native host and installer app
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller==6.16.0
+          python -m PyInstaller --noconfirm --clean --onefile --console --target-architecture universal2 --name spinemaskbridge spine-bridge/spinemaskbridge.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --target-architecture universal2 --name SpineMaskInstaller --hidden-import tkinter --hidden-import tkinter.messagebox \
+            --add-data "spine-bridge/manifest.json:assets" \
+            --add-data "spine-bridge/background.js:assets" \
+            --add-data "spine-bridge/content.js:assets" \
+            --add-data "spine-bridge/mask-content.js:assets" \
+            --add-data "spine-bridge/popup.html:assets" \
+            --add-data "spine-bridge/popup.js:assets" \
+            --add-data "spine-bridge/icon_16.png:assets" \
+            --add-data "spine-bridge/icon_48.png:assets" \
+            --add-data "spine-bridge/icon_128.png:assets" \
+            --add-binary "dist/spinemaskbridge:." \
+            spine-bridge/launch_spinemask_portable.py
+          test -x dist/spinemaskbridge
+          test -s dist/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller
+
+  linux-one-click-installer:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build standalone Linux native host and installer
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller==6.16.0
+          python -m PyInstaller --noconfirm --clean --onefile --console --name spinemaskbridge spine-bridge/spinemaskbridge.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SpineMaskInstaller --hidden-import tkinter --hidden-import tkinter.messagebox \
+            --add-data "spine-bridge/manifest.json:assets" \
+            --add-data "spine-bridge/background.js:assets" \
+            --add-data "spine-bridge/content.js:assets" \
+            --add-data "spine-bridge/mask-content.js:assets" \
+            --add-data "spine-bridge/popup.html:assets" \
+            --add-data "spine-bridge/popup.js:assets" \
+            --add-data "spine-bridge/icon_16.png:assets" \
+            --add-data "spine-bridge/icon_48.png:assets" \
+            --add-data "spine-bridge/icon_128.png:assets" \
+            --add-binary "dist/spinemaskbridge:." \
+            spine-bridge/launch_spinemask_portable.py
+          test -x dist/spinemaskbridge
+          test -x dist/SpineMaskInstaller

@@ -3,6 +3,8 @@
 import importlib.util
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -62,6 +64,88 @@ class EditorDiscoveryTests(unittest.TestCase):
         with patch.object(host.platform, "system", return_value="Linux"), \
              patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
             self.assertEqual(host.recent_editor_project(), self.project.resolve())
+
+    def test_recent_project_parser_accepts_yaml_list_and_unquoted_paths_with_spaces(self):
+        recent = Path(self.tmp.name) / "recent-1.json"
+        recent.write_text(
+            "recentFiles:\n  projectFile:\n    paths:\n"
+            "      - path: " + str(self.project) + "\n",
+            encoding="utf-8",
+        )
+        with patch.object(host.platform, "system", return_value="Linux"), \
+             patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
+            self.assertEqual(host.recent_editor_project(), self.project.resolve())
+
+    def test_recent_project_parser_accepts_json_settings(self):
+        recent = Path(self.tmp.name) / "recent-1.json"
+        recent.write_text(json.dumps({
+            "recentFiles": {"projectFile": {"paths": [{"path": str(self.project)}]}}
+        }), encoding="utf-8")
+        with patch.object(host.platform, "system", return_value="Linux"), \
+             patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
+            self.assertEqual(host.recent_editor_project(), self.project.resolve())
+
+    def test_portable_launcher_maps_all_desktop_platforms(self):
+        launcher_path = Path(__file__).with_name("launch_spinemask_portable.py")
+        spec = importlib.util.spec_from_file_location("spinemask_portable", launcher_path)
+        launcher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(launcher)
+        self.assertEqual(launcher.chrome_platform_key("Darwin", "arm64"), "mac-arm64")
+        self.assertEqual(launcher.chrome_platform_key("Darwin", "x86_64"), "mac-x64")
+        self.assertEqual(launcher.chrome_platform_key("Windows", "AMD64"), "win64")
+        self.assertEqual(launcher.chrome_platform_key("Linux", "x86_64"), "linux64")
+
+    def test_agent_cli_exposes_inspect_extract_and_apply_without_browser(self):
+        cli = Path(__file__).with_name("agent_cli.py")
+        result = subprocess.run([sys.executable, str(cli), "--help"],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("inspect", result.stdout)
+        self.assertIn("extract", result.stdout)
+        self.assertIn("apply", result.stdout)
+
+    def test_release_has_double_click_installers_for_each_desktop_os(self):
+        root = Path(__file__).parent
+        for name in ("INSTALL.command", "INSTALL.bat", "INSTALL.sh", "INSTALL.desktop",
+                     "launch_spinemask_portable.py", "agent_cli.py", "README.md"):
+            self.assertTrue((root / name).is_file(), name + " is missing from the release source")
+
+    def test_portable_extension_id_is_stable_and_chrome_compatible(self):
+        launcher_path = Path(__file__).with_name("launch_spinemask_portable.py")
+        spec = importlib.util.spec_from_file_location("spinemask_portable_id", launcher_path)
+        launcher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(launcher)
+        folder = Path(self.tmp.name) / "extension"
+        first = launcher.extension_id(folder)
+        self.assertEqual(first, launcher.extension_id(folder))
+        self.assertEqual(len(first), 32)
+        self.assertTrue(all("a" <= char <= "p" for char in first))
+
+    def test_headless_cli_uses_license_from_environment_without_logging(self):
+        with patch.dict(os.environ, {"SPINE_LICENSE": "ci-license-secret"}, clear=True):
+            self.assertEqual(host.spine_cli_license_input(), "ci-license-secret\n")
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(host.spine_cli_license_input())
+
+    def test_recent_project_default_locations_match_each_spine_platform(self):
+        cases = [
+            ("Darwin", Path("Library/Application Support/Spine/settings/recent-1.json")),
+            ("Windows", Path("Spine/settings/recent-1.json")),
+            ("Linux", Path(".spine/settings/recent-1.json")),
+        ]
+        for system, relative in cases:
+            with self.subTest(system=system):
+                settings = Path(self.tmp.name) / relative
+                settings.parent.mkdir(parents=True, exist_ok=True)
+                settings.write_text(
+                    'recentFiles: { projectFile: { paths: [{ path: "' +
+                    json.dumps(str(self.project))[1:-1] + '" }] } }',
+                    encoding="utf-8",
+                )
+                with patch.object(host.platform, "system", return_value=system), \
+                     patch.object(Path, "home", return_value=Path(self.tmp.name)), \
+                     patch.dict(os.environ, {}, clear=True):
+                    self.assertEqual(host.recent_editor_project(), self.project.resolve())
 
     def test_explicit_path_rejects_unsupported_file_types(self):
         unsupported = Path(self.tmp.name) / "notes.txt"

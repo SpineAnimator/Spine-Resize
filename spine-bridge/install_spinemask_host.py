@@ -69,9 +69,11 @@ def install(ids, data=None):
         if not original.is_file():
             raise RuntimeError("Windows host executable is missing: use the packaged Windows ZIP")
     else:
-        original = source / "spinemaskbridge.py"
+        binary = source / "spinemaskbridge"
+        script = source / "spinemaskbridge.py"
+        original = binary if binary.is_file() else script
         if not original.is_file():
-            raise FileNotFoundError("Native host missing beside installer")
+            raise FileNotFoundError("Native host executable or Python source is missing beside installer")
     # Install an independent copy. Moving or cleaning a downloaded ZIP must
     # not silently break the registered browser host.
     host = runtime_dir / original.name
