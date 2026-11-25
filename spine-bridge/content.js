@@ -96,10 +96,11 @@
     await ensureReady();
     return new Promise((resolve, reject) => {
       const id = "resize_" + Date.now() + "_" + nextId++;
+      const timeoutMs = method === "get_open_spine_file" ? 180_000 : 60_000;
       const timer = setTimeout(() => {
         pending.delete(id);
         reject(new Error("Spine native bridge request timed out"));
-      }, 60_000);
+      }, timeoutMs);
       pending.set(id, { resolve, reject, timer });
       window.postMessage({ channel: CHANNEL, type: "request", id, method, params }, location.origin);
     });
