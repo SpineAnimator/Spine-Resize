@@ -230,12 +230,27 @@ def create_shortcut(home):
         desktop.parent.mkdir(parents=True, exist_ok=True)
         script = home / "launch_spinemask_portable.py"
         desktop.write_text(
-            "[Desktop Entry]\nType=Application\nName=Spine Mask Tool\n"
-            "Exec=python3 \"" + str(script) + "\" --launch\nTerminal=true\n",
+            "[Desktop Entry]\\nType=Application\\nName=Spine Mask Tool\\n"
+            "Exec=python3 \"" + str(script) + "\" --launch\\nTerminal=true\\n",
             encoding="utf-8"
         )
         desktop.chmod(0o700)
         return desktop
+    if system == "Windows":
+        desktop = Path.home() / "Desktop/Spine Mask Tool.lnk"
+        desktop.parent.mkdir(parents=True, exist_ok=True)
+        target = home / "SpineMaskInstaller.exe"
+        quote = lambda value: "'" + str(value).replace("'", "''") + "'"
+        command = (
+            "$shell = New-Object -ComObject WScript.Shell; "
+            "$shortcut = $shell.CreateShortcut(" + quote(desktop) + "); "
+            "$shortcut.TargetPath = " + quote(target) + "; "
+            "$shortcut.WorkingDirectory = " + quote(home) + "; "
+            "$shortcut.Save()"
+        )
+        subprocess.run(["powershell", "-NoProfile", "-Command", command],
+                       check=True, capture_output=True, timeout=10)
+        return desktop if desktop.is_file() else target
     return home / "SpineMaskInstaller.exe"
 
 
