@@ -573,6 +573,40 @@ class SpineResizeAdapterTests(unittest.TestCase):
         self.assertNotEqual(output, self.project)
 
 
+    def test_linux_open_editor_uses_spine_recent_project_when_gui_has_no_launch_argument(self):
+        config = self.root / ".config"
+        settings = config / "Spine" / "settings" / "recent-1.json"
+        settings.parent.mkdir(parents=True)
+        settings.write_text(json.dumps({
+            "projectFile": {"paths": [{"path": str(self.project.resolve())}]}
+        }), encoding="utf-8")
+
+        original_iterdir = Path.iterdir
+        original_read_bytes = Path.read_bytes
+
+        def fake_iterdir(path):
+            if str(path) == "/proc":
+                return iter([Path("/proc/12345")])
+            return original_iterdir(path)
+
+        def fake_read_bytes(path):
+            if str(path) == "/proc/12345/cmdline":
+                return b"/opt/Spine/Spine.sh\0"
+            return original_read_bytes(path)
+
+        with (
+            patch.object(host.platform, "system", return_value="Linux"),
+            patch.dict(host.os.environ, {"XDG_CONFIG_HOME": str(config)}, clear=True),
+            patch.object(Path, "iterdir", fake_iterdir),
+            patch.object(Path, "read_bytes", fake_read_bytes),
+            patch.object(host.shutil, "which", return_value=None),
+        ):
+            project, method = host.spine_open_path()
+
+        self.assertEqual(project, self.project.resolve())
+        self.assertEqual(method, "editor_recent_project")
+
+
 
 if __name__=="__main__":
     unittest.main(verbosity=2)
