@@ -539,7 +539,8 @@ class SpineResizeAdapterTests(unittest.TestCase):
         original = self.project.read_bytes()
         resized = b"new resized project bytes"
         stage = host.begin_resize_save({
-            "session": "resize-session-test", "path": str(self.project), "size": len(resized)
+            "session": "resize-session-test", "path": str(self.project), "size": len(resized),
+            "filename": "scene.resized.zip"
         })
         chunk = base64.b64encode(resized).decode("ascii")
         host.write_resize_save_chunk({
