@@ -59,7 +59,7 @@ class EditorDiscoveryTests(unittest.TestCase):
             json.dumps(str(self.project))[1:-1] + '" }] } }',
             encoding="utf-8",
         )
-        with patch.object(host.platform, "system", return_value="Linux"), \\
+        with patch.object(host.platform, "system", return_value="Linux"), \
              patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
             self.assertEqual(host.recent_editor_project(), self.project.resolve())
 
