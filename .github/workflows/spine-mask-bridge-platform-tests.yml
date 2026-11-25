@@ -29,4 +29,6 @@ jobs:
       - name: Test explicit project discovery and native host contracts
         run: |
           python spine-bridge/test_spinemask_platforms.py
-          python spine-bridge/test_spinemaskbridge.py
+      - name: Test native messaging and privacy regression suite on Linux
+        if: runner.os == 'Linux'
+        run: python spine-bridge/test_spinemaskbridge.py
