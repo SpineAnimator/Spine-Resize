@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import platform
 import shutil
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -209,7 +210,7 @@ def create_shortcut(home):
         executable.parent.mkdir(parents=True, exist_ok=True)
         script = home / "launch_spinemask_portable.py"
         executable.write_text(
-            "#!/bin/sh\nexec /usr/bin/python3 " + subprocess.list2cmdline([str(script)]) + " --launch\n",
+            "#!/bin/sh\nexec " + shlex.quote(sys.executable) + " " + shlex.quote(str(script)) + " --launch\n",
             encoding="utf-8"
         )
         executable.chmod(0o755)
