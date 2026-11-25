@@ -322,12 +322,12 @@ class NativeBridgeTests(unittest.TestCase):
             host.begin_result({"session":opened["session"],"files":[
                 {"name":"mask.json","size":90},{"name":"mask-overlay.png","size":70}]})
 
-    def test_spine_editor_instance_pid_matcher_is_exact(self):
+    def test_spine_editor_instance_pid_matcher_supports_user_installed_app_paths(self):
         from subprocess import CompletedProcess
         def fake_run(argv,**kwargs):
             self.assertEqual(argv[0],"pgrep")
             self.assertEqual(argv[1],"-f")
-            self.assertEqual(argv[2],r"^/Applications/Spine\.app/Contents/MacOS/Spine( |$)")
+            self.assertEqual(argv[2],r"/Spine\.app/Contents/MacOS/Spine( |$)")
             return CompletedProcess(argv,0,"99800\nnot-a-pid\n99801\n","")
         with patch.object(host.subprocess,"run",side_effect=fake_run):
             self.assertEqual(host.spine_editor_instance_pids(),["99800","99801"])
