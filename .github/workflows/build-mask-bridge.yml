@@ -42,6 +42,28 @@ jobs:
             --add-binary "dist/spinemaskbridge.exe;." `
             spine-bridge/launch_spinemask_portable.py
           if (-not (Test-Path "dist/SpineMaskInstaller.exe")) { throw "One-click Windows installer missing" }
+      - name: Build a console diagnostic twin of the Windows installer
+        shell: pwsh
+        run: |
+          $diagDist = Join-Path $env:RUNNER_TEMP "spinemask-diag-dist"
+          $diagWork = Join-Path $env:RUNNER_TEMP "spinemask-diag-work"
+          python -m PyInstaller --noconfirm --clean --onefile --console --name SpineMaskInstallerDiagnostic --workpath $diagWork --distpath $diagDist --hidden-import tkinter --hidden-import tkinter.messagebox `
+            --add-data "spine-bridge/manifest.json;assets" `
+            --add-data "spine-bridge/background.js;assets" `
+            --add-data "spine-bridge/content.js;assets" `
+            --add-data "spine-bridge/mask-content.js;assets" `
+            --add-data "spine-bridge/popup.html;assets" `
+            --add-data "spine-bridge/popup.js;assets" `
+            --add-data "spine-bridge/icon_16.png;assets" `
+            --add-data "spine-bridge/icon_48.png;assets" `
+            --add-data "spine-bridge/icon_128.png;assets" `
+            --add-binary "dist/spinemaskbridge.exe;." `
+            spine-bridge/launch_spinemask_portable.py
+          if (-not (Test-Path (Join-Path $diagDist "SpineMaskInstallerDiagnostic.exe"))) { throw "Diagnostic installer build missing" }
+          $env:SPINE_MASK_SELF_TEST_OUTPUT = Join-Path $env:RUNNER_TEMP "spinemask-diagnostic-selftest.json"
+          & (Join-Path $diagDist "SpineMaskInstallerDiagnostic.exe") --self-test
+          if (Test-Path $env:SPINE_MASK_SELF_TEST_OUTPUT) { Get-Content $env:SPINE_MASK_SELF_TEST_OUTPUT }
+          if ($LASTEXITCODE -ne 0) { throw "Windows diagnostic installer self-test failed" }
       - name: Verify Windows installer executable starts without Python or a terminal
         shell: pwsh
         run: |
