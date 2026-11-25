@@ -194,17 +194,39 @@ def spine_open_path():
     # Unlike a general Downloads scanner, only a unique recently modified
     # Spine project while Spine is running qualifies. No unrelated file picked.
     try:
-        if platform.system() != "Windows":
+        if platform.system() == "Windows":
+            running = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Spine.exe"],
+                                     capture_output=True, text=True, timeout=3).stdout.lower().count("spine.exe") > 0
+        elif platform.system() == "Darwin":
             running = subprocess.run(["pgrep", "-f", "(Spine.app|Spine.sh|Spine.exe)"],
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                      timeout=3).returncode == 0
         else:
-            running = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Spine.exe"],
-                                     capture_output=True, text=True, timeout=3).stdout.lower().count("spine.exe") > 0
+            running = False
+            for process in Path("/proc").iterdir():
+                if not process.name.isdigit():
+                    continue
+                try:
+                    command = " ".join(os.fsdecode(value) for value in
+                                       (process / "cmdline").read_bytes().split(bytes([0])) if value).casefold()
+                    if "spine" in command and "spinemaskbridge" not in command and not any(
+                        flag in command for flag in (" --input ", " --export ", " --import ")
+                    ):
+                        running = True
+                        break
+                except OSError:
+                    continue
     except (OSError, subprocess.TimeoutExpired):
         running = False
     if not running:
         return None, "editor_not_detected"
+    # Resolve the actual document passed to the running GUI process.
+    if platform.system() in ("Linux", "Windows"):
+        projects = editor_process_projects()
+        if len(projects) == 1:
+            return projects.pop(), "editor_process_argument"
+        if len(projects) > 1:
+            return None, "multiple_editor_projects_choose_file"
     # On macOS/Linux an editor may keep its project file descriptor open.
     # Prefer that explicit process handle over guessing by file modification.
     if platform.system() != "Windows" and shutil.which("lsof"):
@@ -279,6 +301,11 @@ def spine_open_path():
                 return None, "multiple_editor_launch_projects"
         except (OSError, subprocess.TimeoutExpired, ValueError):
             pass
+    # The most recently opened project is a safe fallback only while the
+    # Spine Editor process is running. This covers projects opened from File > Open.
+    recent = recent_editor_project()
+    if recent is not None:
+        return recent, "editor_recent_project"
     # Fail closed rather than guessing a project by mtime or another app.
     return None, "choose_project_required"
 
