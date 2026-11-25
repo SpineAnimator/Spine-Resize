@@ -61,7 +61,8 @@ def resource_dir():
 
 
 def notify(title, message, error=False):
-    if platform.system() == "Windows":
+    system = platform.system()
+    if system in ("Windows", "Linux") and (system == "Windows" or os.environ.get("DISPLAY")):
         try:
             import tkinter
             from tkinter import messagebox
@@ -71,6 +72,20 @@ def notify(title, message, error=False):
             root.destroy()
             return
         except Exception:
+            pass
+    if system == "Darwin" and getattr(sys, "frozen", False):
+        escaped_title = title.replace("\\", "\\\\").replace('"', '\\"')
+        escaped_message = message.replace("\\", "\\\\").replace('"', '\\"')
+        script = (
+            f'display dialog "{escaped_message}" buttons {{"OK"}} with title "{escaped_title}"'
+            if error else
+            f'display notification "{escaped_message}" with title "{escaped_title}"'
+        )
+        try:
+            subprocess.run(["osascript", "-e", script], check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=8)
+            return
+        except (OSError, subprocess.SubprocessError):
             pass
     stream = sys.stderr if error else sys.stdout
     if stream:
