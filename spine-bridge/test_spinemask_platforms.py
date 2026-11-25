@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Cross-platform editor discovery contracts for local users and headless agents."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -41,6 +42,26 @@ class EditorDiscoveryTests(unittest.TestCase):
             path, found_by = host.spine_open_path()
         self.assertIsNone(path)
         self.assertEqual(found_by, "configured_project_not_found")
+
+    def test_linux_editor_command_line_project_is_resolved(self):
+        args = ["/opt/Spine/Spine.sh", str(self.project)]
+        self.assertEqual(host.project_from_editor_args(args), self.project.resolve())
+
+    def test_windows_quoted_editor_command_line_project_is_resolved(self):
+        command = '"C:\\Program Files\\Spine\\Spine.exe" "' + str(self.project) + '"'
+        args = host.windows_command_line_args(command)
+        self.assertEqual(host.project_from_editor_args(args), self.project.resolve())
+
+    def test_recent_project_file_can_be_configured_for_ci_and_desktop(self):
+        recent = Path(self.tmp.name) / "recent-1.json"
+        recent.write_text(
+            'recentFiles: { projectFile: { paths: [{ path: "' +
+            json.dumps(str(self.project))[1:-1] + '" }] } }',
+            encoding="utf-8",
+        )
+        with patch.object(host.platform, "system", return_value="Linux"), \\
+             patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
+            self.assertEqual(host.recent_editor_project(), self.project.resolve())
 
     def test_explicit_path_rejects_unsupported_file_types(self):
         unsupported = Path(self.tmp.name) / "notes.txt"
