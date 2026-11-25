@@ -230,8 +230,8 @@ def create_shortcut(home):
         desktop.parent.mkdir(parents=True, exist_ok=True)
         script = home / "launch_spinemask_portable.py"
         desktop.write_text(
-            "[Desktop Entry]\\nType=Application\\nName=Spine Mask Tool\\n"
-            "Exec=python3 \"" + str(script) + "\" --launch\\nTerminal=true\\n",
+            "[Desktop Entry]\nType=Application\nName=Spine Mask Tool\n"
+            "Exec=python3 \"" + str(script) + "\" --launch\nTerminal=true\n",
             encoding="utf-8"
         )
         desktop.chmod(0o700)
