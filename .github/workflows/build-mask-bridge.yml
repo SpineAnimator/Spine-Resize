@@ -5,6 +5,10 @@ on:
     paths:
       - spine-bridge/**
       - .github/workflows/build-mask-bridge.yml
+  pull_request:
+    paths:
+      - spine-bridge/**
+      - .github/workflows/build-mask-bridge.yml
   workflow_dispatch:
 permissions:
   contents: write
@@ -180,6 +184,7 @@ jobs:
           retention-days: 5
 
   publish:
+    if: github.event_name != 'pull_request'
     needs: [windows-host, macos-host, linux-host]
     runs-on: ubuntu-latest
     timeout-minutes: 12
