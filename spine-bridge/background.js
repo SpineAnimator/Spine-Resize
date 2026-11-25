@@ -71,7 +71,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           result = await callNative("read_file_chunk", { session: msg.session, path: msg.path, offset: msg.offset });
           break;
         case "BEGIN_SAVE":
-          result = await callNative("begin_resize_save", { session: msg.session, path: msg.path, size: msg.size });
+          result = await callNative("begin_resize_save", { session: msg.session, path: msg.path, size: msg.size, filename: msg.filename });
           break;
         case "WRITE_SAVE_CHUNK":
           result = await callNative("write_resize_save_chunk", { stage: msg.stage, offset: msg.offset, base64: msg.base64 });
