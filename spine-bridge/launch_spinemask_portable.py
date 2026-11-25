@@ -348,7 +348,7 @@ def main():
         except Exception as error:
             report = {"ok": False, "error": str(error)[:1000]}
         if report_path:
-            Path(report_path).expanduser().write_text(json.dumps(report, indent=2) + "\\n",
+            Path(report_path).expanduser().write_text(json.dumps(report, indent=2) + "\n",
                                                      encoding="utf-8")
         return 0 if report["ok"] else 2
     try:
