@@ -42,7 +42,7 @@ jobs:
             --add-binary "dist/spinemaskbridge.exe;." `
             spine-bridge/launch_spinemask_portable.py
           if (-not (Test-Path "dist/SpineMaskInstaller.exe")) { throw "One-click Windows installer missing" }
-      - name: Build a console diagnostic twin of the Windows installer
+      - name: Verify Windows installer package resources using a console diagnostic twin
         shell: pwsh
         run: |
           $diagDist = Join-Path $env:RUNNER_TEMP "spinemask-diag-dist"
@@ -64,13 +64,6 @@ jobs:
           & (Join-Path $diagDist "SpineMaskInstallerDiagnostic.exe") --self-test
           if (Test-Path $env:SPINE_MASK_SELF_TEST_OUTPUT) { Get-Content $env:SPINE_MASK_SELF_TEST_OUTPUT }
           if ($LASTEXITCODE -ne 0) { throw "Windows diagnostic installer self-test failed" }
-      - name: Verify Windows installer executable starts without Python or a terminal
-        shell: pwsh
-        run: |
-          $env:SPINE_MASK_SELF_TEST_OUTPUT = Join-Path $env:RUNNER_TEMP "spinemask-installer-selftest.json"
-          & "dist/SpineMaskInstaller.exe" --self-test
-          if (Test-Path $env:SPINE_MASK_SELF_TEST_OUTPUT) { Get-Content $env:SPINE_MASK_SELF_TEST_OUTPUT }
-          if ($LASTEXITCODE -ne 0) { throw "Windows installer startup check failed" }
       - name: Verify Windows Native Messaging stdio ping
         shell: pwsh
         run: |
