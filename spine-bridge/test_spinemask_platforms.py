@@ -101,6 +101,12 @@ class EditorDiscoveryTests(unittest.TestCase):
         self.assertEqual(len(first), 32)
         self.assertTrue(all("a" <= char <= "p" for char in first))
 
+    def test_headless_cli_uses_license_from_environment_without_logging(self):
+        with patch.dict(os.environ, {"SPINE_LICENSE": "ci-license-secret"}, clear=True):
+            self.assertEqual(host.spine_cli_license_input(), "ci-license-secret\n")
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(host.spine_cli_license_input())
+
     def test_recent_project_default_locations_match_each_spine_platform(self):
         cases = [
             ("Darwin", Path("Library/Application Support/Spine/settings/recent-1.json")),
