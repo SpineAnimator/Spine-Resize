@@ -787,6 +787,10 @@ def commit_result(payload):
     if any(stage["written"][name] != length for name, length in stage["lengths"].items()):
         raise ValueError("INCOMPLETE_OUTPUT")
     updated = json.loads((stage["temp"] / "mask.json").read_text(encoding="utf-8"))
+    if isinstance(updated.get("skeleton"), dict):
+        # The result folder contains a complete local images/ tree. Never keep
+        # the source machine's absolute images path in a portable Spine project.
+        updated["skeleton"]["images"] = "./images/"
     if not isinstance(updated.get("slots"), list) or not updated.get("skins"):
         raise ValueError("INVALID_SPINE_JSON")
     clips = []
