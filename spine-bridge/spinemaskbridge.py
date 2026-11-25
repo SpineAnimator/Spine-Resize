@@ -58,6 +58,12 @@ def reply(message):
     sys.stdout.buffer.flush()
 
 
+def spine_cli_license_input():
+    """Read the optional CI license from the environment without logging it."""
+    license_value = os.environ.get("SPINE_LICENSE", "").strip()
+    return (license_value + "\n") if license_value else None
+
+
 def editor_cli():
     candidates = []
     override = os.environ.get("SPINE_MASK_EDITOR_CLI")
@@ -347,7 +353,8 @@ def export_json(project, folder):
     command = [cli, "--update", "4.3.26", "--input", str(project),
                "--output", str(folder), "--export", str(profile)]
     try:
-        result = subprocess.run(command, capture_output=True, text=True, timeout=150)
+        result = subprocess.run(command, input=spine_cli_license_input(),
+                                capture_output=True, text=True, timeout=150)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ValueError("LICENSED_SPINE_EXPORT_TIMEOUT_OR_LAUNCH_FAILED") from exc
     if result.returncode:
@@ -847,7 +854,8 @@ def commit_result(payload):
             command = [cli, "--update", "4.3.26", "--input", str(json_out),
                        "--output", str(output), "--import"]
             try:
-                proc = subprocess.run(command, input="\n", capture_output=True, text=True, timeout=180)
+                proc = subprocess.run(command, input=spine_cli_license_input() or "\n",
+                                      capture_output=True, text=True, timeout=180)
                 imported = proc.returncode == 0 and output.is_file() and output.stat().st_size > 0
             except (subprocess.TimeoutExpired, OSError):
                 imported = False
