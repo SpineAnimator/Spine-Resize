@@ -62,8 +62,84 @@ jobs:
           if-no-files-found: error
           retention-days: 5
 
+  macos-host:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build standalone macOS native host and installer app
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller==6.16.0
+          python -m PyInstaller --noconfirm --clean --onefile --console --name spinemaskbridge spine-bridge/spinemaskbridge.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SpineMaskInstaller --hidden-import tkinter --hidden-import tkinter.messagebox \
+            --add-data "spine-bridge/manifest.json:assets" \
+            --add-data "spine-bridge/background.js:assets" \
+            --add-data "spine-bridge/content.js:assets" \
+            --add-data "spine-bridge/mask-content.js:assets" \
+            --add-data "spine-bridge/popup.html:assets" \
+            --add-data "spine-bridge/popup.js:assets" \
+            --add-data "spine-bridge/icon_16.png:assets" \
+            --add-data "spine-bridge/icon_48.png:assets" \
+            --add-data "spine-bridge/icon_128.png:assets" \
+            --add-binary "dist/spinemaskbridge:." \
+            spine-bridge/launch_spinemask_portable.py
+          test -x dist/spinemaskbridge
+          test -x dist/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spinemaskbridge-macos
+          path: |
+            dist/spinemaskbridge
+            dist/SpineMaskInstaller.app
+          if-no-files-found: error
+          retention-days: 5
+
+  linux-host:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build standalone Linux native host and installer
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check pyinstaller==6.16.0
+          python -m PyInstaller --noconfirm --clean --onefile --console --name spinemaskbridge spine-bridge/spinemaskbridge.py
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SpineMaskInstaller --hidden-import tkinter --hidden-import tkinter.messagebox \
+            --add-data "spine-bridge/manifest.json:assets" \
+            --add-data "spine-bridge/background.js:assets" \
+            --add-data "spine-bridge/content.js:assets" \
+            --add-data "spine-bridge/mask-content.js:assets" \
+            --add-data "spine-bridge/popup.html:assets" \
+            --add-data "spine-bridge/popup.js:assets" \
+            --add-data "spine-bridge/icon_16.png:assets" \
+            --add-data "spine-bridge/icon_48.png:assets" \
+            --add-data "spine-bridge/icon_128.png:assets" \
+            --add-binary "dist/spinemaskbridge:." \
+            spine-bridge/launch_spinemask_portable.py
+          test -x dist/spinemaskbridge
+          test -x dist/SpineMaskInstaller
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spinemaskbridge-linux
+          path: |
+            dist/spinemaskbridge
+            dist/SpineMaskInstaller
+          if-no-files-found: error
+          retention-days: 5
+
   publish:
-    needs: [windows-host]
+    needs: [windows-host, macos-host, linux-host]
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -74,23 +150,43 @@ jobs:
         with:
           name: spinemaskbridge-windows
           path: windows-host
+      - uses: actions/download-artifact@v4
+        with:
+          name: spinemaskbridge-macos
+          path: macos-host
+      - uses: actions/download-artifact@v4
+        with:
+          name: spinemaskbridge-linux
+          path: linux-host
       - name: Build release with both macOS native host and Windows executable
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p dist/spine-mask-resize-bridge
+          mkdir -p dist/spine-mask-resize-bridge/{macos,linux,windows}
           for asset in manifest.json background.js mask-content.js content.js \
             popup.html popup.js icon_16.png icon_48.png icon_128.png \
             spinemaskbridge.py install_spinemask_host.py launch_spinemask_mac.py \
             launch_spinemask_portable.py agent_cli.py README.md install_spinemask_linux.sh \
-            INSTALL.command INSTALL.sh INSTALL.bat; do
+            INSTALL.command INSTALL.sh INSTALL.bat INSTALL.desktop; do
             test -s "spine-bridge/$asset"
             cp "spine-bridge/$asset" "dist/spine-mask-resize-bridge/$asset"
           done
           test -s windows-host/spinemaskbridge.exe
-          cp windows-host/spinemaskbridge.exe dist/spine-mask-resize-bridge/
-          cp windows-host/SpineMaskInstaller.exe dist/spine-mask-resize-bridge/
-          chmod 755 dist/spine-mask-resize-bridge/INSTALL.command dist/spine-mask-resize-bridge/INSTALL.sh
+          test -s windows-host/SpineMaskInstaller.exe
+          test -s macos-host/spinemaskbridge
+          test -x macos-host/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller
+          test -s linux-host/spinemaskbridge
+          test -s linux-host/SpineMaskInstaller
+          cp windows-host/spinemaskbridge.exe dist/spine-mask-resize-bridge/windows/
+          cp windows-host/SpineMaskInstaller.exe dist/spine-mask-resize-bridge/windows/
+          cp macos-host/spinemaskbridge dist/spine-mask-resize-bridge/macos/
+          cp -R macos-host/SpineMaskInstaller.app dist/spine-mask-resize-bridge/macos/
+          cp linux-host/spinemaskbridge dist/spine-mask-resize-bridge/linux/
+          cp linux-host/SpineMaskInstaller dist/spine-mask-resize-bridge/linux/
+          chmod 755 dist/spine-mask-resize-bridge/INSTALL.command dist/spine-mask-resize-bridge/INSTALL.sh dist/spine-mask-resize-bridge/INSTALL.desktop
+          chmod 755 dist/spine-mask-resize-bridge/macos/spinemaskbridge
+          chmod 755 dist/spine-mask-resize-bridge/macos/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller
+          chmod 755 dist/spine-mask-resize-bridge/linux/spinemaskbridge dist/spine-mask-resize-bridge/linux/SpineMaskInstaller
           chmod 755 dist/spine-mask-resize-bridge/spinemaskbridge.py
           node --check dist/spine-mask-resize-bridge/background.js
           node --check dist/spine-mask-resize-bridge/mask-content.js
@@ -108,19 +204,24 @@ jobs:
           zip -q -X -r Spine-Mask-Resize-Bridge.zip spine-mask-resize-bridge
           unzip -t Spine-Mask-Resize-Bridge.zip >/dev/null
           test "$(unzip -Z1 Spine-Mask-Resize-Bridge.zip | awk '/\.(png|jpg|jpeg|psd|spine)$/ && !/icon_/ {n++} END{print n+0}')" -eq 0
-          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq spinemaskbridge.exe
-          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq SpineMaskInstaller.exe
+          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq windows/spinemaskbridge.exe
+          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq windows/SpineMaskInstaller.exe
+          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq macos/spinemaskbridge
+          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq macos/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller
+          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq linux/spinemaskbridge
+          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq linux/SpineMaskInstaller
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq launch_spinemask_portable.py
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq INSTALL.command
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq INSTALL.bat
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq INSTALL.sh
+          unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq INSTALL.desktop
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq launch_spinemask_mac.py
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq install_spinemask_linux.sh
           bash -n spine-mask-resize-bridge/install_spinemask_linux.sh
           bash -n spine-mask-resize-bridge/INSTALL.command
           bash -n spine-mask-resize-bridge/INSTALL.sh
           sha256sum Spine-Mask-Resize-Bridge.zip
-          echo 'SPINE_MASK_MAC_WINDOWS_LINUX_PACKAGE_PASS'
+          echo 'SPINE_MASK_MAC_WINDOWS_LINUX_ONE_CLICK_PACKAGE_PASS'
       - name: Publish verified extension and native hosts in existing Release
         shell: bash
         env:
