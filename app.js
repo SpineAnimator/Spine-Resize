@@ -9103,7 +9103,7 @@ window.boneHierarchy = boneHierarchy;
       const info = await window.spineBridge.getOpenSpineFile();
       if (!info || !info.data || !info.data.length) return false;
       bridgeProjectPath = info.path;
-      bridgeOriginalName = info.path.split('/').pop();
+      bridgeOriginalName = info.path.replace(/\\/g, '/').split('/').pop();
       const ext = (bridgeOriginalName.split('.').pop() || '').toLowerCase();
       bridgeIsSpine = (ext === 'spine' || ext === 'skel' || ext === 'bytes');
       const file = new File([new Uint8Array(info.data)], bridgeOriginalName, { type: 'application/octet-stream' });
@@ -9151,8 +9151,8 @@ window.boneHierarchy = boneHierarchy;
         if (!ok) {
           // Auto-download the installer
           const installerLink = document.createElement('a');
-          installerLink.href = 'spine-bridge/install_bridge.py';
-          installerLink.download = 'install_bridge.py';
+          installerLink.href = 'https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Resize-Bridge.zip';
+          installerLink.download = 'Spine-Mask-Resize-Bridge.zip';
           installerLink.style.display = 'none';
           document.body.appendChild(installerLink);
           installerLink.click();
@@ -9162,16 +9162,16 @@ window.boneHierarchy = boneHierarchy;
           const guideLink = document.createElement('a');
           guideLink.href = 'INSTALL_BRIDGE.md';
           guideLink.target = '_blank';
-          guideLink.textContent = '📖 Manual Install Guide';
+          guideLink.textContent = 'One-click installation guide';
           guideLink.style.color = '#6bb3ff';
           guideLink.style.textDecoration = 'underline';
           guideLink.style.cursor = 'pointer';
           guideLink.style.marginLeft = '8px';
           
           line.textContent = '';
-          line.appendChild(document.createTextNode('Spine bridge not connected. Auto-downloading installer... '));
+          line.appendChild(document.createTextNode('Bridge is not connected. Downloading the one-click installer... '));
           line.appendChild(guideLink);
-          line.appendChild(document.createTextNode(' — run the downloaded install_bridge.py, then everything is fully automatic.'));
+          line.appendChild(document.createTextNode(' — extract the ZIP and open INSTALL.command (macOS), INSTALL.bat (Windows), or INSTALL.desktop (Linux). No terminal or Python is needed.'));
           
           withSpineBtn.disabled = false;
           return;
@@ -9249,8 +9249,10 @@ window.boneHierarchy = boneHierarchy;
         try {
           const entry = result.entries.find(e => e.path === bridgeOriginalName);
           if (entry) {
-            await window.spineBridge.saveFile(bridgeProjectPath, Array.from(entry.data));
-            line.replaceChildren(document.createTextNode(result.line + '  (written back to ' + bridgeOriginalName + ')'));
+            const saved = await window.spineBridge.saveFile(bridgeProjectPath, Array.from(entry.data));
+            if (saved?.ok && saved.path) {
+              line.replaceChildren(document.createTextNode(result.line + '  (saved safe copy: ' + saved.path + ')'));
+            }
           }
         } catch (err) {
           console.warn('Bridge write-back failed:', err);
