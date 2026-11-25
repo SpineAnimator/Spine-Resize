@@ -9153,7 +9153,7 @@ window.boneHierarchy = boneHierarchy;
         const state = await bridgeLoad();
         if (!state.ok) {
           const hostMissing = state.reason === 'missing' ||
-            /native messaging host.*not found|specified native messaging host not found|extension is not installed in this browser/i.test(state.error || '');
+            /native messaging host.*not found|specified native messaging host not found|native host unavailable|extension is not installed in this browser/i.test(state.error || '');
           if (hostMissing) {
             const installerLink = document.createElement('a');
             installerLink.href = 'https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Resize-Bridge.zip';
