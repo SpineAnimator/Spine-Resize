@@ -5,6 +5,10 @@ on:
     paths:
       - spine-bridge/**
       - .github/workflows/build-mask-bridge.yml
+  pull_request:
+    paths:
+      - spine-bridge/**
+      - .github/workflows/build-mask-bridge.yml
   workflow_dispatch:
 permissions:
   contents: write
@@ -38,6 +42,28 @@ jobs:
             --add-binary "dist/spinemaskbridge.exe;." `
             spine-bridge/launch_spinemask_portable.py
           if (-not (Test-Path "dist/SpineMaskInstaller.exe")) { throw "One-click Windows installer missing" }
+      - name: Verify Windows installer package resources using a console diagnostic twin
+        shell: pwsh
+        run: |
+          $diagDist = Join-Path $env:RUNNER_TEMP "spinemask-diag-dist"
+          $diagWork = Join-Path $env:RUNNER_TEMP "spinemask-diag-work"
+          python -m PyInstaller --noconfirm --clean --onefile --console --name SpineMaskInstallerDiagnostic --workpath $diagWork --distpath $diagDist --hidden-import tkinter --hidden-import tkinter.messagebox `
+            --add-data "spine-bridge/manifest.json;assets" `
+            --add-data "spine-bridge/background.js;assets" `
+            --add-data "spine-bridge/content.js;assets" `
+            --add-data "spine-bridge/mask-content.js;assets" `
+            --add-data "spine-bridge/popup.html;assets" `
+            --add-data "spine-bridge/popup.js;assets" `
+            --add-data "spine-bridge/icon_16.png;assets" `
+            --add-data "spine-bridge/icon_48.png;assets" `
+            --add-data "spine-bridge/icon_128.png;assets" `
+            --add-binary "dist/spinemaskbridge.exe;." `
+            spine-bridge/launch_spinemask_portable.py
+          if (-not (Test-Path (Join-Path $diagDist "SpineMaskInstallerDiagnostic.exe"))) { throw "Diagnostic installer build missing" }
+          $env:SPINE_MASK_SELF_TEST_OUTPUT = Join-Path $env:RUNNER_TEMP "spinemask-diagnostic-selftest.json"
+          & (Join-Path $diagDist "SpineMaskInstallerDiagnostic.exe") --self-test
+          if (Test-Path $env:SPINE_MASK_SELF_TEST_OUTPUT) { Get-Content $env:SPINE_MASK_SELF_TEST_OUTPUT }
+          if ($LASTEXITCODE -ne 0) { throw "Windows diagnostic installer self-test failed" }
       - name: Verify Windows Native Messaging stdio ping
         shell: pwsh
         run: |
@@ -91,6 +117,26 @@ jobs:
             spine-bridge/launch_spinemask_portable.py
           test -x dist/spinemaskbridge
           test -x dist/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller
+      - name: Verify macOS native host protocol and installer startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,struct,subprocess
+          msg=json.dumps({"id":1,"method":"ping","params":{}}).encode()
+          frame=struct.pack("<I",len(msg))+msg
+          p=subprocess.run(["dist/spinemaskbridge"],input=frame,capture_output=True,timeout=25)
+          assert p.returncode==0,f"macOS host exited {p.returncode}"
+          assert len(p.stdout)>=4,"macOS host returned no frame"
+          size=struct.unpack("<I",p.stdout[:4])[0]
+          result=json.loads(p.stdout[4:4+size])
+          assert result["result"]["protocol"]=="spinemask/1",result
+          print("SPINE_MASK_MACOS_NATIVE_PING_PASS")
+          PY
+          export SPINE_MASK_SELF_TEST_OUTPUT="$RUNNER_TEMP/spinemask-installer-selftest.json"
+          dist/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller --self-test
+          cat "$SPINE_MASK_SELF_TEST_OUTPUT"
+          echo "SPINE_MASK_MACOS_INSTALLER_STARTUP_PASS"
       - uses: actions/upload-artifact@v4
         with:
           name: spinemaskbridge-macos
@@ -129,6 +175,26 @@ jobs:
             spine-bridge/launch_spinemask_portable.py
           test -x dist/spinemaskbridge
           test -x dist/SpineMaskInstaller
+      - name: Verify Linux native host protocol and installer startup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,struct,subprocess
+          msg=json.dumps({"id":1,"method":"ping","params":{}}).encode()
+          frame=struct.pack("<I",len(msg))+msg
+          p=subprocess.run(["dist/spinemaskbridge"],input=frame,capture_output=True,timeout=25)
+          assert p.returncode==0,f"Linux host exited {p.returncode}"
+          assert len(p.stdout)>=4,"Linux host returned no frame"
+          size=struct.unpack("<I",p.stdout[:4])[0]
+          result=json.loads(p.stdout[4:4+size])
+          assert result["result"]["protocol"]=="spinemask/1",result
+          print("SPINE_MASK_LINUX_NATIVE_PING_PASS")
+          PY
+          export SPINE_MASK_SELF_TEST_OUTPUT="$RUNNER_TEMP/spinemask-installer-selftest.json"
+          dist/SpineMaskInstaller --self-test
+          cat "$SPINE_MASK_SELF_TEST_OUTPUT"
+          echo "SPINE_MASK_LINUX_INSTALLER_STARTUP_PASS"
       - uses: actions/upload-artifact@v4
         with:
           name: spinemaskbridge-linux
@@ -139,6 +205,7 @@ jobs:
           retention-days: 5
 
   publish:
+    if: github.event_name != 'pull_request'
     needs: [windows-host, macos-host, linux-host]
     runs-on: ubuntu-latest
     timeout-minutes: 12
