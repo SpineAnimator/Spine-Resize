@@ -32,6 +32,7 @@ IMAGES = {".png", ".jpg", ".jpeg", ".webp"}
 session = None
 stage = None
 binary_import = None
+resize_save_stage = None
 
 
 def recv():
@@ -1013,6 +1014,176 @@ def read_import_chunk(payload):
     return packet
 
 
+def get_open_file_path(_):
+    path, method = spine_open_path()
+    if not path:
+        return None
+    return {"path": str(path), "foundBy": method}
+
+
+def get_open_spine_file(_):
+    result = open_project({})
+    if not result.get("open"):
+        return None
+    active = checked_session({"session": result["session"]})
+    source = active["source"]
+    size = source.stat().st_size
+    if size <= 0 or size > MAX_PROJECT:
+        raise ValueError("SPINE_PROJECT_SIZE_LIMIT")
+    return {"path": str(source), "name": source.name,
+            "session": active["id"], "size": size}
+
+
+def read_project_chunk(payload):
+    active = checked_session(payload)
+    source = active["source"]
+    if hashlib.sha256(source.read_bytes()).hexdigest() != active["sha256"]:
+        raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
+    offset = payload.get("offset")
+    total = source.stat().st_size
+    if not isinstance(offset, int) or offset < 0 or offset >= total:
+        raise ValueError("INVALID_PROJECT_OFFSET")
+    with source.open("rb") as handle:
+        handle.seek(offset)
+        raw = handle.read(CHUNK)
+    return {"offset": offset, "total": total,
+            "base64": base64.b64encode(raw).decode("ascii"),
+            "done": offset + len(raw) >= total}
+
+
+def get_sibling_images(payload):
+    active = checked_session(payload)
+    project_path = Path(payload.get("projectPath") or "").expanduser().resolve(strict=True)
+    if project_path != active["source"].resolve():
+        raise ValueError("PROJECT_PATH_DOES_NOT_MATCH_ACTIVE_SESSION")
+    root = active["source"].parent.resolve()
+    images = []
+    for key, candidate in active["files"].items():
+        if key == "skeleton.json":
+            continue
+        try:
+            resolved = candidate.resolve(strict=True)
+            if not resolved.is_relative_to(root) or resolved.suffix.lower() not in IMAGES:
+                continue
+            size = resolved.stat().st_size
+            if size <= 0 or size > MAX_PROJECT:
+                continue
+            images.append({"path": str(resolved), "name": resolved.name, "size": size})
+        except (OSError, RuntimeError):
+            continue
+    return {"session": active["id"], "images": images}
+
+
+def read_file_chunk(payload):
+    active = checked_session(payload)
+    requested = Path(payload.get("path") or "").expanduser().resolve(strict=True)
+    root = active["source"].parent.resolve()
+    if not requested.is_relative_to(root):
+        raise ValueError("FILE_OUTSIDE_ACTIVE_PROJECT")
+    allowed = False
+    for key, candidate in active["files"].items():
+        if key == "skeleton.json":
+            continue
+        try:
+            if candidate.resolve(strict=True) == requested and requested.suffix.lower() in IMAGES:
+                allowed = True
+                break
+        except (OSError, RuntimeError):
+            continue
+    if not allowed:
+        raise ValueError("FILE_NOT_REFERENCED_BY_ACTIVE_PROJECT")
+    total = requested.stat().st_size
+    if total <= 0 or total > MAX_PROJECT:
+        raise ValueError("IMAGE_SIZE_LIMIT")
+    offset = payload.get("offset")
+    if not isinstance(offset, int) or offset < 0 or offset >= total:
+        raise ValueError("INVALID_IMAGE_OFFSET")
+    with requested.open("rb") as handle:
+        handle.seek(offset)
+        raw = handle.read(CHUNK)
+    return {"path": str(requested), "offset": offset, "total": total,
+            "base64": base64.b64encode(raw).decode("ascii"),
+            "done": offset + len(raw) >= total}
+
+
+def begin_resize_save(payload):
+    global resize_save_stage
+    active = checked_session(payload)
+    requested = Path(payload.get("path") or "").expanduser().resolve(strict=True)
+    if requested != active["source"].resolve():
+        raise ValueError("ONLY_THE_ACTIVE_PROJECT_CAN_BE_SAVED")
+    if hashlib.sha256(active["source"].read_bytes()).hexdigest() != active["sha256"]:
+        raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
+    size = payload.get("size")
+    if not isinstance(size, int) or size < 1 or size > MAX_OUTPUT:
+        raise ValueError("RESIZE_OUTPUT_SIZE_LIMIT")
+    output_dir = active["source"].parent / "SpineResizeResults"
+    output_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    base = active["source"].stem + ".resized" + active["source"].suffix
+    target = output_dir / base
+    counter = 2
+    while target.exists():
+        target = output_dir / (active["source"].stem + f".resized-{counter}" + active["source"].suffix)
+        counter += 1
+    fd, temporary = tempfile.mkstemp(prefix=".spine-resize-", suffix=".tmp", dir=str(output_dir))
+    os.close(fd)
+    if resize_save_stage and resize_save_stage.get("temp"):
+        try:
+            resize_save_stage["temp"].unlink(missing_ok=True)
+        except OSError:
+            pass
+    resize_save_stage = {
+        "id": uuid.uuid4().hex, "session": active["id"], "source": active["source"],
+        "source_sha256": active["sha256"], "temp": Path(temporary), "target": target,
+        "expected": size, "written": 0, "created": time.time(),
+    }
+    return {"stage": resize_save_stage["id"], "path": str(target), "size": size}
+
+
+def write_resize_save_chunk(payload):
+    active = resize_save_stage
+    if not active or payload.get("stage") != active["id"]:
+        raise ValueError("INVALID_RESIZE_SAVE_STAGE")
+    if time.time() - active["created"] > 600:
+        active["temp"].unlink(missing_ok=True)
+        raise ValueError("RESIZE_SAVE_STAGE_EXPIRED")
+    offset = payload.get("offset")
+    if not isinstance(offset, int) or offset != active["written"]:
+        raise ValueError("INVALID_RESIZE_SAVE_OFFSET")
+    encoded = payload.get("base64")
+    if not isinstance(encoded, str):
+        raise ValueError("INVALID_RESIZE_SAVE_CHUNK")
+    raw = base64.b64decode(encoded, validate=True)
+    if not raw or len(raw) > CHUNK or active["written"] + len(raw) > active["expected"]:
+        raise ValueError("INVALID_RESIZE_SAVE_CHUNK_SIZE")
+    with active["temp"].open("ab") as handle:
+        handle.write(raw)
+    active["written"] += len(raw)
+    return {"written": active["written"], "expected": active["expected"]}
+
+
+def finish_resize_save(payload):
+    global resize_save_stage
+    active = resize_save_stage
+    if not active or payload.get("stage") != active["id"]:
+        raise ValueError("INVALID_RESIZE_SAVE_STAGE")
+    if active["written"] != active["expected"]:
+        raise ValueError("INCOMPLETE_RESIZE_SAVE")
+    project_session = checked_session({"session": active["session"]})
+    if hashlib.sha256(project_session["source"].read_bytes()).hexdigest() != active["source_sha256"]:
+        active["temp"].unlink(missing_ok=True)
+        resize_save_stage = None
+        raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
+    if active["target"].exists():
+        active["temp"].unlink(missing_ok=True)
+        resize_save_stage = None
+        raise ValueError("RESIZE_OUTPUT_ALREADY_EXISTS")
+    os.replace(active["temp"], active["target"])
+    result = {"ok": True, "path": str(active["target"])}
+    resize_save_stage = None
+    return result
+
+
 def ping(_):
     system = platform.system()
     capabilities = ["multi-slot-clipping", "weighted-clipping"]
@@ -1028,6 +1199,14 @@ def ping(_):
 
 HANDLERS = {
     "ping": ping,
+    "get_open_file_path": get_open_file_path,
+    "get_open_spine_file": get_open_spine_file,
+    "read_project_chunk": read_project_chunk,
+    "get_sibling_images": get_sibling_images,
+    "read_file_chunk": read_file_chunk,
+    "begin_resize_save": begin_resize_save,
+    "write_resize_save_chunk": write_resize_save_chunk,
+    "finish_resize_save": finish_resize_save,
     "open_project": open_project,
     "choose_project": choose_project,
     "begin_import": begin_import,
