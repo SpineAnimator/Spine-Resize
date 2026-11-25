@@ -2,8 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 
 const source = fs.readFileSync(new URL("./content.js", import.meta.url), "utf8");
 const origin = "https://spineanimator.github.io";
@@ -72,11 +70,11 @@ test("isolated-world adapter forwards only allowlisted methods to the extension 
     channel: "spine-resize-native-v1", type: "request",
     id: "resize_1", method: "get_open_file_path", params: {}
   });
-  assert.deepEqual(calls, [{ type: "GET_OPEN_FILE_PATH" }]);
-  assert.deepEqual(sent.at(-1), {
+  assert.equal(JSON.stringify(calls), JSON.stringify([{ type: "GET_OPEN_FILE_PATH" }]));
+  assert.equal(JSON.stringify(sent.at(-1)), JSON.stringify({
     channel: "spine-resize-native-v1", type: "response",
     id: "resize_1", ok: true, result: { path: "/project/scene.spine" }, error: null
-  });
+  }));
 
   window.dispatchMessage({
     channel: "spine-resize-native-v1", type: "request",
