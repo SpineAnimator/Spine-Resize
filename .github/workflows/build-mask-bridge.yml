@@ -45,7 +45,9 @@ jobs:
       - name: Verify Windows installer executable starts without Python or a terminal
         shell: pwsh
         run: |
+          $env:SPINE_MASK_SELF_TEST_OUTPUT = Join-Path $env:RUNNER_TEMP "spinemask-installer-selftest.json"
           & "dist/SpineMaskInstaller.exe" --self-test
+          if (Test-Path $env:SPINE_MASK_SELF_TEST_OUTPUT) { Get-Content $env:SPINE_MASK_SELF_TEST_OUTPUT }
           if ($LASTEXITCODE -ne 0) { throw "Windows installer startup check failed" }
       - name: Verify Windows Native Messaging stdio ping
         shell: pwsh
@@ -116,7 +118,9 @@ jobs:
           assert result["result"]["protocol"]=="spinemask/1",result
           print("SPINE_MASK_MACOS_NATIVE_PING_PASS")
           PY
-          dist/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller --self-test >/dev/null 2>&1
+          export SPINE_MASK_SELF_TEST_OUTPUT="$RUNNER_TEMP/spinemask-installer-selftest.json"
+          dist/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller --self-test
+          cat "$SPINE_MASK_SELF_TEST_OUTPUT"
           echo "SPINE_MASK_MACOS_INSTALLER_STARTUP_PASS"
       - uses: actions/upload-artifact@v4
         with:
@@ -172,7 +176,9 @@ jobs:
           assert result["result"]["protocol"]=="spinemask/1",result
           print("SPINE_MASK_LINUX_NATIVE_PING_PASS")
           PY
-          dist/SpineMaskInstaller --self-test >/dev/null 2>&1
+          export SPINE_MASK_SELF_TEST_OUTPUT="$RUNNER_TEMP/spinemask-installer-selftest.json"
+          dist/SpineMaskInstaller --self-test
+          cat "$SPINE_MASK_SELF_TEST_OUTPUT"
           echo "SPINE_MASK_LINUX_INSTALLER_STARTUP_PASS"
       - uses: actions/upload-artifact@v4
         with:
