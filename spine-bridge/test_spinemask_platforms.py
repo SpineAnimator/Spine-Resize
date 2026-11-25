@@ -87,7 +87,7 @@ class EditorDiscoveryTests(unittest.TestCase):
     def test_release_has_double_click_installers_for_each_desktop_os(self):
         root = Path(__file__).parent
         for name in ("INSTALL.command", "INSTALL.bat", "INSTALL.sh",
-                     "launch_spinemask_portable.py", "README.md"):
+                     "launch_spinemask_portable.py", "agent_cli.py", "README.md"):
             self.assertTrue((root / name).is_file(), name + " is missing from the release source")
 
     def test_portable_extension_id_is_stable_and_chrome_compatible(self):
