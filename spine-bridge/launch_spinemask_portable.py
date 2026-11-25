@@ -332,6 +332,8 @@ def verify_packaged_resources():
             raise RuntimeError("Packaged extension manifest is not a valid Native Messaging MV3 extension.")
     if missing:
         raise RuntimeError("Packaged installer is missing resources: " + ", ".join(missing))
+    return {"resourceRoot": str(root), "assetRoot": str(asset_root),
+            "nativeHost": str(host), "extensionFiles": len(EXTENSION_FILES)}
 
 
 def main():
@@ -340,8 +342,15 @@ def main():
     parser.add_argument("--self-test", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.self_test:
-        verify_packaged_resources()
-        return 0
+        report_path = os.environ.get("SPINE_MASK_SELF_TEST_OUTPUT", "").strip()
+        try:
+            report = {"ok": True, **verify_packaged_resources()}
+        except Exception as error:
+            report = {"ok": False, "error": str(error)[:1000]}
+        if report_path:
+            Path(report_path).expanduser().write_text(json.dumps(report, indent=2) + "\\n",
+                                                     encoding="utf-8")
+        return 0 if report["ok"] else 2
     try:
         home, extension, profile, identifier = install_bundle()
         binary = ensure_browser(home)
