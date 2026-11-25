@@ -23,7 +23,7 @@ No Python installation, terminal commands, extension developer mode or manual ma
 
 The bridge reads the saved .spine project and only the image files referenced by its skeleton. It cannot read unsaved in-memory editor changes; save in Spine before importing.
 
-Spine Resize writes the resized project as a separate copy under **SpineResizeResults/** beside the original project. The original file is not overwritten.
+Spine Resize writes a self-contained resized ZIP bundle under **SpineResizeResults/** beside the original project. The original file is not overwritten.
 
 ## Security
 
