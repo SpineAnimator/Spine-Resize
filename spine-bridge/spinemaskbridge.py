@@ -585,27 +585,38 @@ def copy_local_project_assets(project, dest):
 
 
 def recent_editor_project():
-    """The actual path Spine has recorded after loading a project (macOS).
-
-    The Spine 4.3 recent-file list uses its own settings syntax rather than
-    strict JSON. Reading only its first projectFile entry avoids selecting
-    unrelated desktop or recent files. No paths are sent to a website.
-    """
-    settings = Path.home() / "Library/Application Support/Spine/settings/recent-1.json"
-    try:
-        content = settings.read_text(encoding="utf-8")
-        section = content.split("recentFiles:", 1)[1]
-        section = section.split("projectFile:", 1)[1][:20000]
-        match = re.search(
-            r'paths\s*:\s*\[\s*\{\s*path\s*:\s*"((?:\\.|[^"\\])*)"',
-            section
-        )
-        if not match:
-            return None
-        path = Path(json.loads('"' + match.group(1) + '"')).expanduser()
-        return path.resolve() if path.is_file() else None
-    except (OSError, ValueError, IndexError, json.JSONDecodeError):
-        return None
+    """Read Spine's last-opened project path from its per-user settings."""
+    configured = os.environ.get("SPINE_MASK_RECENT_FILE", "").strip()
+    if configured:
+        candidates = [Path(configured).expanduser()]
+    elif platform.system() == "Darwin":
+        candidates = [Path.home() / "Library/Application Support/Spine/settings/recent-1.json"]
+    elif platform.system() == "Windows":
+        appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData/Roaming"))
+        candidates = [appdata / "Spine/settings/recent-1.json"]
+    else:
+        config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        candidates = [
+            config / "Spine/settings/recent-1.json",
+            Path.home() / ".local/share/Spine/settings/recent-1.json",
+        ]
+    for settings in candidates:
+        try:
+            content = settings.read_text(encoding="utf-8")
+            section = content.split("recentFiles:", 1)[1]
+            section = section.split("projectFile:", 1)[1][:20000]
+            match = re.search(
+                r'paths\s*:\s*\[\s*\{\s*path\s*:\s*"((?:\\.|[^"\\])*)"',
+                section
+            )
+            if not match:
+                continue
+            path = Path(json.loads('"' + match.group(1) + '"')).expanduser()
+            if path.is_file() and path.suffix.lower() in KINDS and path.stat().st_size <= MAX_PROJECT:
+                return path.resolve()
+        except (OSError, ValueError, IndexError, json.JSONDecodeError):
+            continue
+    return None
 
 
 def wait_for_editor_open(project, seconds=12):
