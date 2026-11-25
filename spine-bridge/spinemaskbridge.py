@@ -25,7 +25,7 @@ import uuid
 MAX_FRAME = 900_000
 CHUNK = 96_000
 MAX_PROJECT = 32 * 1024 * 1024
-MAX_OUTPUT = 32 * 1024 * 1024
+MAX_OUTPUT = 128 * 1024 * 1024
 MAX_FILES = 80
 KINDS = {".json", ".spine", ".skel"}
 IMAGES = {".png", ".jpg", ".jpeg", ".webp"}
@@ -1124,11 +1124,16 @@ def begin_resize_save(payload):
             raise ValueError("UNSAFE_RESIZE_OUTPUT_DIRECTORY")
     else:
         output_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
-    base = active["source"].stem + ".resized" + active["source"].suffix
-    target = output_dir / base
+    filename = payload.get("filename")
+    if not isinstance(filename, str) or not filename or Path(filename).name != filename:
+        raise ValueError("INVALID_RESIZE_OUTPUT_FILENAME")
+    if not filename.lower().endswith(".zip") or filename in (".", ".."):
+        raise ValueError("RESIZE_OUTPUT_MUST_BE_A_ZIP_BUNDLE")
+    target = output_dir / filename
+    stem, suffix = target.stem, target.suffix
     counter = 2
     while target.exists():
-        target = output_dir / (active["source"].stem + f".resized-{counter}" + active["source"].suffix)
+        target = output_dir / f"{stem}-{counter}{suffix}"
         counter += 1
     fd, temporary = tempfile.mkstemp(prefix=".spine-resize-", suffix=".tmp", dir=str(output_dir))
     os.close(fd)
