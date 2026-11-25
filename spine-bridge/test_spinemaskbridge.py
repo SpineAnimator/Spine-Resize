@@ -535,6 +535,15 @@ class SpineResizeAdapterTests(unittest.TestCase):
                 "session": "resize-session-test", "path": str(outside), "offset": 0
             })
 
+    def test_resize_save_rejects_path_traversal_and_non_zip_names(self):
+        for filename in ("../outside.zip", "scene.resized.spine", ""):
+            with self.subTest(filename=filename):
+                with self.assertRaises(ValueError):
+                    host.begin_resize_save({
+                        "session": "resize-session-test", "path": str(self.project),
+                        "size": 4, "filename": filename
+                    })
+
     def test_resize_save_writes_a_new_copy_and_never_overwrites_source(self):
         original = self.project.read_bytes()
         resized = b"new resized project bytes"
@@ -550,6 +559,7 @@ class SpineResizeAdapterTests(unittest.TestCase):
         output = Path(result["path"])
         self.assertTrue(result["ok"])
         self.assertEqual(output.parent.name, "SpineResizeResults")
+        self.assertEqual(output.name, "scene.resized.zip")
         self.assertEqual(output.read_bytes(), resized)
         self.assertEqual(self.project.read_bytes(), original)
         self.assertNotEqual(output, self.project)
