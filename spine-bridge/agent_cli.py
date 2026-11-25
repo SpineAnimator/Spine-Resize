@@ -34,6 +34,39 @@ def inspect_project():
     })
 
 
+def extract_project(output_dir):
+    project = bridge.open_project({})
+    if not project.get("open") or not project.get("session"):
+        raise RuntimeError("SPINE_PROJECT_NOT_AVAILABLE: " + str(project.get("reason", "open_project_failed")))
+    root = Path(output_dir).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    written = []
+    for item in project.get("files", []):
+        key = str(item.get("key", "")).replace("\\", "/")
+        parts = key.split("/")
+        if not key or key.startswith("/") or any(part in ("", ".", "..") for part in parts):
+            raise RuntimeError("UNSAFE_PROJECT_FILE_KEY")
+        destination = root.joinpath(*parts)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        offset = 0
+        with destination.open("wb") as output:
+            while offset < int(item["size"]):
+                packet = bridge.read_chunk({
+                    "session": project["session"],
+                    "key": key,
+                    "offset": offset,
+                })
+                if packet.get("offset") != offset or packet.get("total") != int(item["size"]):
+                    raise RuntimeError("PROJECT_READ_CHUNK_MISMATCH")
+                chunk = base64.b64decode(packet.get("base64", ""), validate=True)
+                if not chunk or offset + len(chunk) > int(item["size"]):
+                    raise RuntimeError("PROJECT_READ_CHUNK_INVALID")
+                output.write(chunk)
+                offset += len(chunk)
+        written.append({"path": "/".join(parts), "size": destination.stat().st_size})
+    emit({"ok": True, "source": project.get("source"), "output": str(root), "files": written})
+
+
 def apply_mask(mask_path, open_editor=False):
     project = bridge.open_project({})
     if not project.get("open") or not project.get("session"):
@@ -79,6 +112,8 @@ def main():
     parser.add_argument("--recent-file", help="Override Spine recent project settings file")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("inspect", help="Return the selected project's skeleton and image inventory")
+    extract = sub.add_parser("extract", help="Extract only skeleton-referenced images into a local workspace")
+    extract.add_argument("output_dir")
     apply = sub.add_parser("apply", help="Validate and import a mask.json as a new .spine project")
     apply.add_argument("mask_json")
     apply.add_argument("--open-editor", action="store_true",
@@ -95,6 +130,8 @@ def main():
     try:
         if args.command == "inspect":
             inspect_project()
+        elif args.command == "extract":
+            extract_project(args.output_dir)
         else:
             apply_mask(args.mask_json, args.open_editor)
     except Exception as error:
