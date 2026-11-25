@@ -264,7 +264,7 @@ def spine_open_path():
     if platform.system() == "Darwin":
         try:
             pids = subprocess.run(
-                ["pgrep", "-f", r"^/Applications/Spine\.app/Contents/MacOS/Spine( |$)"],
+                ["pgrep", "-f", r"/Spine\.app/Contents/MacOS/Spine( |$)"],
                 capture_output=True, text=True, timeout=3
             ).stdout.split()
             launched = set()
@@ -274,10 +274,10 @@ def spine_open_path():
                 result = subprocess.run(["ps", "-p", pid, "-o", "command="],
                     capture_output=True, text=True, timeout=3)
                 command = result.stdout.strip()
-                prefix = "/Applications/Spine.app/Contents/MacOS/Spine"
-                if not command.startswith(prefix):
+                match = re.match(r"^(.+/Spine\.app/Contents/MacOS/Spine)(?:\s+(.*))?$", command)
+                if not match:
                     continue
-                tail = command[len(prefix):].strip()
+                tail = (match.group(2) or "").strip()
                 # Exclude CLI jobs; arguments after --update can contain spaces
                 # in an OS path and are not shell-escaped by ps.
                 if tail.startswith("--update "):
@@ -619,42 +619,101 @@ def copy_local_project_assets(project, dest):
 
 
 def recent_editor_project():
-    """Read Spine's last-opened project path from its per-user settings."""
+    """Read Spine's last-opened project from JSON or YAML-style user settings."""
     configured = os.environ.get("SPINE_MASK_RECENT_FILE", "").strip()
     if configured:
         candidates = [Path(configured).expanduser()]
     elif platform.system() == "Darwin":
-        candidates = [Path.home() / "Library/Application Support/Spine/settings/recent-1.json"]
+        candidates = [
+            Path.home() / "Library/Application Support/Spine/settings/recent-1.json",
+            Path.home() / "Library/Application Support/Spine/settings/recent.json",
+        ]
     elif platform.system() == "Windows":
         appdata = Path(os.environ.get("APPDATA", Path.home() / "AppData/Roaming"))
         candidates = [
             Path.home() / "Spine/settings/recent-1.json",
             appdata / "Spine/settings/recent-1.json",
+            appdata / "Spine/settings/recent.json",
         ]
     else:
         config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
         candidates = [
             Path.home() / ".spine/settings/recent-1.json",
             config / "Spine/settings/recent-1.json",
+            Path.home() / "Spine/settings/recent-1.json",
+            config / "Spine/settings/recent.json",
         ]
-    for settings in candidates:
+
+    def valid_project(value):
+        if not isinstance(value, str) or not value.strip():
+            return None
         try:
-            content = settings.read_text(encoding="utf-8")
-            section = content.split("recentFiles:", 1)[1]
-            section = section.split("projectFile:", 1)[1][:20000]
-            match = re.search(
-                r'paths\s*:\s*\[\s*\{\s*path\s*:\s*"((?:\\.|[^"\\])*)"',
-                section
-            )
-            if not match:
-                continue
-            path = Path(json.loads('"' + match.group(1) + '"')).expanduser()
+            path = Path(value.strip().strip('"').strip("'")).expanduser()
             if path.is_file() and path.suffix.lower() in KINDS and path.stat().st_size <= MAX_PROJECT:
                 return path.resolve()
-        except (OSError, ValueError, IndexError, json.JSONDecodeError):
-            continue
-    return None
+        except (OSError, RuntimeError, ValueError):
+            pass
+        return None
 
+    def json_project_paths(value, in_project_file=False):
+        found = []
+        if isinstance(value, dict):
+            for key, item in value.items():
+                normalized = str(key).replace("_", "").casefold()
+                if normalized == "projectfile":
+                    found.extend(json_project_paths(item, True))
+                elif in_project_file and normalized == "paths" and isinstance(item, list):
+                    for entry in item:
+                        if isinstance(entry, dict):
+                            path = valid_project(entry.get("path"))
+                            if path:
+                                found.append(path)
+                elif isinstance(item, (dict, list)):
+                    found.extend(json_project_paths(item, in_project_file))
+        elif isinstance(value, list):
+            for item in value:
+                found.extend(json_project_paths(item, in_project_file))
+        return found
+
+    for settings in candidates:
+        try:
+            content = settings.read_text(encoding="utf-8-sig")
+        except OSError:
+            continue
+        try:
+            parsed = json.loads(content)
+            for path in json_project_paths(parsed):
+                return path
+        except (ValueError, TypeError):
+            pass
+
+        # Spine releases have also written recent-1.json as a YAML-like
+        # settings document. Accept quoted, single-quoted and unquoted paths,
+        # including paths with spaces, instead of requiring one exact layout.
+        project_match = re.search(
+            r'(?i)["' + '"' + r']?project[_-]?file["' + '"' + r']?\s*:',
+            content
+        )
+        if not project_match:
+            continue
+        section = content[project_match.end():]
+        pattern = re.compile(
+            r'(?i)\bpath\s*:\s*(?:"((?:\\.|[^"\\])*)"|'
+            r"'((?:\\.|[^'\\])*)'|([^,\]}\r\n]+))"
+        )
+        for match in pattern.finditer(section):
+            raw = next((group for group in match.groups() if group is not None), "")
+            if match.group(1) is not None:
+                try:
+                    raw = json.loads('"' + raw + '"')
+                except ValueError:
+                    continue
+            elif match.group(2) is not None:
+                raw = raw.replace("\\'", "'").replace("''", "'")
+            path = valid_project(raw.strip())
+            if path:
+                return path
+    return None
 
 def wait_for_editor_open(project, seconds=12):
     project = Path(project).resolve()
@@ -669,7 +728,7 @@ def wait_for_editor_open(project, seconds=12):
 def spine_editor_instance_pids():
     """Return the running Spine 4.3 GUI process IDs, not batch CLI jobs."""
     result = subprocess.run(
-        ["pgrep", "-f", r"^/Applications/Spine\.app/Contents/MacOS/Spine( |$)"],
+        ["pgrep", "-f", r"/Spine\.app/Contents/MacOS/Spine( |$)"],
         capture_output=True, text=True, timeout=4
     )
     return sorted({line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()})
