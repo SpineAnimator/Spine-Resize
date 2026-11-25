@@ -10,6 +10,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -460,6 +461,98 @@ class NativeBridgeTests(unittest.TestCase):
             path, method = host.spine_open_path()
         self.assertIsNone(path)
         self.assertEqual(method, "choose_project_required")
+
+
+class SpineResizeAdapterTests(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.root = Path(self.dir.name)
+        self.project = self.root / "scene.json"
+        self.project.write_text(json.dumps(build_json()), encoding="utf-8")
+        self.images = self.root / "images"
+        self.images.mkdir()
+        self.face = self.images / "face.png"
+        self.part = self.images / "part-a.png"
+        self.unreferenced = self.images / "hotspot.png"
+        self.face.write_bytes(PNG)
+        self.part.write_bytes(PNG + b"part")
+        self.unreferenced.write_bytes(PNG + b"unreferenced")
+        skeleton_export = self.root / "skeleton.json"
+        skeleton_export.write_text(json.dumps(build_json()), encoding="utf-8")
+        host.session = {
+            "id": "resize-session-test",
+            "created": time.time(),
+            "source": self.project.resolve(),
+            "sha256": hashlib.sha256(self.project.read_bytes()).hexdigest(),
+            "files": {
+                "skeleton.json": skeleton_export,
+                "images/face.png": self.face,
+                "images/part-a.png": self.part,
+            },
+        }
+        host.resize_save_stage = None
+
+    def tearDown(self):
+        host.session = None
+        host.resize_save_stage = None
+
+    def test_project_and_referenced_images_are_streamed_from_active_session(self):
+        with patch.object(host, "open_project",
+                          return_value={"open": True, "session": "resize-session-test"}):
+            meta = host.get_open_spine_file({})
+        self.assertEqual(meta["path"], str(self.project.resolve()))
+        self.assertEqual(meta["size"], self.project.stat().st_size)
+
+        project_chunk = host.read_project_chunk({
+            "session": meta["session"], "offset": 0
+        })
+        self.assertEqual(base64.b64decode(project_chunk["base64"]), self.project.read_bytes())
+        self.assertTrue(project_chunk["done"])
+
+        images = host.get_sibling_images({
+            "session": meta["session"], "projectPath": str(self.project)
+        })
+        self.assertEqual({item["name"] for item in images["images"]}, {"face.png", "part-a.png"})
+        self.assertNotIn(str(self.unreferenced.resolve()), {item["path"] for item in images["images"]})
+
+        face_chunk = host.read_file_chunk({
+            "session": images["session"], "path": str(self.face), "offset": 0
+        })
+        self.assertEqual(base64.b64decode(face_chunk["base64"]), self.face.read_bytes())
+        self.assertTrue(face_chunk["done"])
+
+    def test_image_reads_reject_unreferenced_and_outside_project_paths(self):
+        with self.assertRaisesRegex(ValueError, "FILE_NOT_REFERENCED_BY_ACTIVE_PROJECT"):
+            host.read_file_chunk({
+                "session": "resize-session-test", "path": str(self.unreferenced), "offset": 0
+            })
+        outside = self.root.parent / "unrelated.png"
+        outside.write_bytes(PNG)
+        self.addCleanup(lambda: outside.unlink(missing_ok=True))
+        with self.assertRaisesRegex(ValueError, "FILE_OUTSIDE_ACTIVE_PROJECT"):
+            host.read_file_chunk({
+                "session": "resize-session-test", "path": str(outside), "offset": 0
+            })
+
+    def test_resize_save_writes_a_new_copy_and_never_overwrites_source(self):
+        original = self.project.read_bytes()
+        resized = b"new resized project bytes"
+        stage = host.begin_resize_save({
+            "session": "resize-session-test", "path": str(self.project), "size": len(resized)
+        })
+        chunk = base64.b64encode(resized).decode("ascii")
+        host.write_resize_save_chunk({
+            "stage": stage["stage"], "offset": 0, "base64": chunk
+        })
+        result = host.finish_resize_save({"stage": stage["stage"]})
+        output = Path(result["path"])
+        self.assertTrue(result["ok"])
+        self.assertEqual(output.parent.name, "SpineResizeResults")
+        self.assertEqual(output.read_bytes(), resized)
+        self.assertEqual(self.project.read_bytes(), original)
+        self.assertNotEqual(output, self.project)
+
 
 
 if __name__=="__main__":
