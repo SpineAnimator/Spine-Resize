@@ -133,7 +133,7 @@ def editor_process_projects():
                 continue
             try:
                 raw = (entry / "cmdline").read_bytes()
-                args = [os.fsdecode(value) for value in raw.split(b"\\0") if value]
+                args = [os.fsdecode(value) for value in raw.split(b"\0") if value]
                 joined = " ".join(args).casefold()
                 if "spine" not in joined or any(flag in args for flag in ("--input", "--export", "--import")):
                     continue
@@ -168,13 +168,28 @@ def editor_process_projects():
     # Unlike a general Downloads scanner, only a unique recently modified
     # Spine project while Spine is running qualifies. No unrelated file picked.
     try:
-        if platform.system() != "Windows":
+        if platform.system() == "Windows":
+            running = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Spine.exe"],
+                                     capture_output=True, text=True, timeout=3).stdout.lower().count("spine.exe") > 0
+        elif platform.system() == "Darwin":
             running = subprocess.run(["pgrep", "-f", "(Spine.app|Spine.sh|Spine.exe)"],
                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                      timeout=3).returncode == 0
         else:
-            running = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Spine.exe"],
-                                     capture_output=True, text=True, timeout=3).stdout.lower().count("spine.exe") > 0
+            running = False
+            for process in Path("/proc").iterdir():
+                if not process.name.isdigit():
+                    continue
+                try:
+                    command = " ".join(os.fsdecode(value) for value in
+                                       (process / "cmdline").read_bytes().split(bytes([0])) if value).casefold()
+                    if "spine" in command and "spinemaskbridge" not in command and not any(
+                        flag in command for flag in (" --input ", " --export ", " --import ")
+                    ):
+                        running = True
+                        break
+                except OSError:
+                    continue
     except (OSError, subprocess.TimeoutExpired):
         running = False
     if not running:
@@ -312,7 +327,7 @@ def export_json(project, folder):
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise ValueError("LICENSED_SPINE_EXPORT_TIMEOUT_OR_LAUNCH_FAILED") from exc
     if result.returncode:
-        # Do not disclose user's license data or absolute paths from CLI logs.
+                r'paths\s*:\s*\[\s*\{\s*path\s*:\s*"((?:\\.|[^"\\])*)"',
         raise ValueError("LICENSED_SPINE_EXPORT_FAILED")
     files = [item for item in folder.glob("*.json") if item != profile]
     if len(files) != 1:
