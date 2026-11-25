@@ -248,7 +248,7 @@ def create_shortcut(home):
         import plistlib
         info = {
             "CFBundleExecutable": "SpineMaskTool",
-            "CFBundleIdentifier": "dev.spineanimator.spinemasktool",
+            "CFBundleIdentifier": "dev.spineanimator.spinemaskresize",
             "CFBundleName": "Spine Mask + Resize",
             "CFBundlePackageType": "APPL",
             "CFBundleShortVersionString": "1.0",
