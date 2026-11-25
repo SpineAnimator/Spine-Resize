@@ -174,7 +174,7 @@ jobs:
           test -s windows-host/spinemaskbridge.exe
           test -s windows-host/SpineMaskInstaller.exe
           test -s macos-host/spinemaskbridge
-          test -x macos-host/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller
+          test -s macos-host/SpineMaskInstaller.app/Contents/MacOS/SpineMaskInstaller
           test -s linux-host/spinemaskbridge
           test -s linux-host/SpineMaskInstaller
           cp windows-host/spinemaskbridge.exe dist/spine-mask-resize-bridge/windows/
