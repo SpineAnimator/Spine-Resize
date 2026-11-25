@@ -25,14 +25,16 @@ class EditorDiscoveryTests(unittest.TestCase):
 
     def test_linux_editor_cli_reads_the_installed_spine_path_file(self):
         executable = Path(self.tmp.name) / "Spine.sh"
-        executable.write_text("#!/bin/sh\\nexit 0\\n", encoding="utf-8")
+        executable.write_text("fake licensed editor executable", encoding="utf-8")
         path_file = Path(self.tmp.name) / "Spine.sh.path"
         path_file.write_text(str(executable), encoding="utf-8")
-        with patch.object(host.platform, "system", return_value="Linux"), \\
-             patch.dict(os.environ, {
-                 "SPINE_MASK_EDITOR_CLI_PATH_FILE": str(path_file)
-             }, clear=True), \\
-             patch.object(host.shutil, "which", return_value=None):
+        with (
+            patch.object(host.platform, "system", return_value="Linux"),
+            patch.dict(os.environ, {
+                "SPINE_MASK_EDITOR_CLI_PATH_FILE": str(path_file)
+            }, clear=True),
+            patch.object(host.shutil, "which", return_value=None),
+        ):
             self.assertEqual(host.editor_cli(), str(executable.resolve()))
 
     def test_explicit_project_path_supports_headless_linux_ci(self):
