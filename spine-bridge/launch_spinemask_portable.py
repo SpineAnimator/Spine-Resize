@@ -302,7 +302,7 @@ def launch_browser(binary, profile, extension):
         "--no-first-run",
         "--no-default-browser-check",
         "--new-window",
-        URL,
+        *URLS,
     ]
     options = {
         "stdin": subprocess.DEVNULL,
