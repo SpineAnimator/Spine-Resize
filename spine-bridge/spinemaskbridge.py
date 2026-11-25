@@ -506,7 +506,14 @@ def _load_project(path, method):
         if session and session.get("export"):
             shutil.rmtree(session["export"], ignore_errors=True)
         snap = hashlib.sha256(path.read_bytes()).hexdigest()
+        source_stat = path.stat()
+        file_snapshots = {
+            key: {"size": candidate.stat().st_size, "mtime_ns": candidate.stat().st_mtime_ns}
+            for key, candidate in files.items()
+        }
         session = {"id": uuid.uuid4().hex, "source": path, "sha256": snap, "files": files,
+                   "source_size": source_stat.st_size, "source_mtime_ns": source_stat.st_mtime_ns,
+                   "file_snapshots": file_snapshots,
                    "export": staging, "method": method, "created": time.time()}
         stage = None
         return {"connected": True, "open": True, "session": session["id"],
@@ -548,7 +555,8 @@ def read_chunk(payload):
 def begin_result(payload):
     global stage
     active = checked_session(payload)
-    if hashlib.sha256(active["source"].read_bytes()).hexdigest() != active["sha256"]:
+    source_stat = active["source"].stat()
+    if source_stat.st_size != active["source_size"] or source_stat.st_mtime_ns != active["source_mtime_ns"]:
         raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
     entries = payload.get("files")
     if not isinstance(entries, list) or len(entries) != 1:
@@ -1027,7 +1035,8 @@ def get_open_spine_file(_):
         return None
     active = checked_session({"session": result["session"]})
     source = active["source"]
-    size = source.stat().st_size
+    source_stat = source.stat()
+    size = source_stat.st_size
     if size <= 0 or size > MAX_PROJECT:
         raise ValueError("SPINE_PROJECT_SIZE_LIMIT")
     return {"path": str(source), "name": source.name,
@@ -1037,10 +1046,11 @@ def get_open_spine_file(_):
 def read_project_chunk(payload):
     active = checked_session(payload)
     source = active["source"]
-    if hashlib.sha256(source.read_bytes()).hexdigest() != active["sha256"]:
+    source_stat = source.stat()
+    if source_stat.st_size != active["source_size"] or source_stat.st_mtime_ns != active["source_mtime_ns"]:
         raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
     offset = payload.get("offset")
-    total = source.stat().st_size
+    total = active["source_size"]
     if not isinstance(offset, int) or offset < 0 or offset >= total:
         raise ValueError("INVALID_PROJECT_OFFSET")
     with source.open("rb") as handle:
@@ -1065,7 +1075,8 @@ def get_sibling_images(payload):
             resolved = candidate.resolve(strict=True)
             if not resolved.is_relative_to(root) or resolved.suffix.lower() not in IMAGES:
                 continue
-            size = resolved.stat().st_size
+            snapshot = active["file_snapshots"].get(key, {})
+            size = snapshot.get("size", resolved.stat().st_size)
             if size <= 0 or size > MAX_PROJECT:
                 continue
             images.append({"path": str(resolved), "name": resolved.name, "size": size})
@@ -1092,7 +1103,12 @@ def read_file_chunk(payload):
             continue
     if not allowed:
         raise ValueError("FILE_NOT_REFERENCED_BY_ACTIVE_PROJECT")
-    total = requested.stat().st_size
+    snapshot = next((active["file_snapshots"].get(key) for key, candidate in active["files"].items()
+                     if key != "skeleton.json" and candidate.resolve(strict=True) == requested), None)
+    stat = requested.stat()
+    if not snapshot or stat.st_size != snapshot["size"] or stat.st_mtime_ns != snapshot["mtime_ns"]:
+        raise ValueError("SOURCE_IMAGE_CHANGED_RESTART_IMPORT")
+    total = snapshot["size"]
     if total <= 0 or total > MAX_PROJECT:
         raise ValueError("IMAGE_SIZE_LIMIT")
     offset = payload.get("offset")
@@ -1180,7 +1196,8 @@ def finish_resize_save(payload):
     if active["written"] != active["expected"]:
         raise ValueError("INCOMPLETE_RESIZE_SAVE")
     project_session = checked_session({"session": active["session"]})
-    if hashlib.sha256(project_session["source"].read_bytes()).hexdigest() != active["source_sha256"]:
+    source_stat = project_session["source"].stat()
+    if source_stat.st_size != project_session["source_size"] or source_stat.st_mtime_ns != project_session["source_mtime_ns"]:
         active["temp"].unlink(missing_ok=True)
         resize_save_stage = None
         raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
