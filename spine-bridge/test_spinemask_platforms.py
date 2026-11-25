@@ -30,6 +30,7 @@ class EditorDiscoveryTests(unittest.TestCase):
         path_file.write_text(str(executable), encoding="utf-8")
         with (
             patch.object(host.platform, "system", return_value="Linux"),
+            patch.object(Path, "home", return_value=Path(self.tmp.name)),
             patch.dict(os.environ, {
                 "SPINE_MASK_EDITOR_CLI_PATH_FILE": str(path_file)
             }, clear=True),
