@@ -65,6 +65,26 @@ class EditorDiscoveryTests(unittest.TestCase):
              patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
             self.assertEqual(host.recent_editor_project(), self.project.resolve())
 
+    def test_recent_project_parser_accepts_yaml_list_and_unquoted_paths_with_spaces(self):
+        recent = Path(self.tmp.name) / "recent-1.json"
+        recent.write_text(
+            "recentFiles:\\n  projectFile:\\n    paths:\\n"
+            "      - path: " + str(self.project) + "\\n",
+            encoding="utf-8",
+        )
+        with patch.object(host.platform, "system", return_value="Linux"), \\
+             patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
+            self.assertEqual(host.recent_editor_project(), self.project.resolve())
+
+    def test_recent_project_parser_accepts_json_settings(self):
+        recent = Path(self.tmp.name) / "recent-1.json"
+        recent.write_text(json.dumps({
+            "recentFiles": {"projectFile": {"paths": [{"path": str(self.project)}]}}
+        }), encoding="utf-8")
+        with patch.object(host.platform, "system", return_value="Linux"), \\
+             patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
+            self.assertEqual(host.recent_editor_project(), self.project.resolve())
+
     def test_portable_launcher_maps_all_desktop_platforms(self):
         launcher_path = Path(__file__).with_name("launch_spinemask_portable.py")
         spec = importlib.util.spec_from_file_location("spinemask_portable", launcher_path)
