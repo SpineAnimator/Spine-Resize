@@ -78,7 +78,7 @@ test("page-world API streams the project, referenced images and safe ZIP save", 
     offset: 0, total: 3, base64: "AQID", done: true
   });
   const project = await projectPromise;
-  assert.deepEqual(project.data, [1, 2, 3]);
+  assert.equal(JSON.stringify(project.data), JSON.stringify([1, 2, 3]));
 
   const imagesPromise = window.spineBridge.getSiblingImages(project.path);
   await answer("get_sibling_images", {
@@ -93,7 +93,7 @@ test("page-world API streams the project, referenced images and safe ZIP save", 
     path: images[0].path, offset: 0, total: 2, base64: "BAU=", done: true
   });
   const image = await imagePromise;
-  assert.deepEqual(image.data, [4, 5]);
+  assert.equal(JSON.stringify(image.data), JSON.stringify([4, 5]));
 
   const savePromise = window.spineBridge.saveFile(
     project.path, new Uint8Array([7, 8, 9]), "scene.resized.zip"
