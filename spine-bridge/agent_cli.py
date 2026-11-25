@@ -88,7 +88,7 @@ def main():
     if args.project:
         os.environ["SPINE_MASK_PROJECT_PATH"] = str(Path(args.project).expanduser().resolve())
     if args.spine_cli:
-        os.environ["SPINE_CLI_PATH"] = str(Path(args.spine_cli).expanduser().resolve())
+        os.environ["SPINE_MASK_EDITOR_CLI"] = str(Path(args.spine_cli).expanduser().resolve())
     if args.recent_file:
         os.environ["SPINE_MASK_RECENT_FILE"] = str(Path(args.recent_file).expanduser().resolve())
 
