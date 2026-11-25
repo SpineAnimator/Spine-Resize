@@ -8,7 +8,7 @@ Download and extract **Spine-Mask-Resize-Bridge.zip**, then double-click the lau
 - **Windows:** **INSTALL.bat** (starts the Windows installer)
 - **Linux:** double-click **INSTALL.desktop** (or use **INSTALL.sh** as a fallback)
 
-The installer is self-contained; Python and terminal commands are not required. It registers one least-privilege Native Messaging host used by both Spine Resize and Spine Mask Tool, downloads Chrome for Testing if needed, and opens a dedicated browser profile with the extension already loaded. It does not modify the user's normal Chrome profile.
+The installer is self-contained; Python and terminal commands are not required. It registers one least-privilege Native Messaging host used by both Spine Resize and Spine Mask Tool, downloads Chrome for Testing if needed, and opens a dedicated browser profile with the extension already loaded, with both Spine web tools open in separate tabs. It does not modify the user's normal Chrome profile.
 
 The first setup downloads Chrome for Testing and may take a few minutes. Keep the extracted installer folder until setup has completed. After installation, use the **Spine Mask + Resize** desktop shortcut to reopen the dedicated browser. macOS Gatekeeper or Windows SmartScreen may show the operating system's standard confirmation because the installers are not signed with a paid publisher certificate.
 
