@@ -104,7 +104,10 @@ def install_bundle():
             raise FileNotFoundError("Installer package is missing " + name)
 
     system = platform.system()
-    host_name = "spinemaskbridge.exe" if system == "Windows" else "spinemaskbridge.py"
+    if system == "Windows":
+        host_name = "spinemaskbridge.exe"
+    else:
+        host_name = "spinemaskbridge" if (resources / "spinemaskbridge").is_file() else "spinemaskbridge.py"
     host_source = resources / host_name
     if not host_source.is_file():
         host_source = home / host_name
@@ -117,12 +120,11 @@ def install_bundle():
             source = resources / name
             if source.is_file() and source.resolve() != (home / name).resolve():
                 copy_file(source, home / name, executable=name == "launch_spinemask_portable.py")
-    else:
-        # The self-contained Windows installer can be copied and relaunched
-        # without Python or a terminal.
-        executable = Path(sys.executable)
-        if getattr(sys, "frozen", False) and executable.is_file():
-            copy_file(executable, home / "SpineMaskInstaller.exe")
+    if getattr(sys, "frozen", False) and Path(sys.executable).is_file():
+        if system == "Windows":
+            copy_file(Path(sys.executable), home / "SpineMaskInstaller.exe")
+        elif system == "Linux":
+            copy_file(Path(sys.executable), home / "SpineMaskInstaller", executable=True)
 
     manifest = json.loads((extension / "manifest.json").read_text(encoding="utf-8"))
     if manifest.get("manifest_version") != 3 or "nativeMessaging" not in manifest.get("permissions", []):
@@ -206,6 +208,14 @@ def create_shortcut(home):
     system = platform.system()
     if system == "Darwin":
         app = Path.home() / "Applications/Spine Mask Tool.app"
+        if getattr(sys, "frozen", False):
+            source_app = Path(sys.executable).resolve().parents[2]
+            if source_app.suffix == ".app" and source_app.is_dir():
+                if app.exists():
+                    shutil.rmtree(app)
+                app.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(source_app, app)
+                return app
         executable = app / "Contents/MacOS/SpineMaskTool"
         executable.parent.mkdir(parents=True, exist_ok=True)
         script = home / "launch_spinemask_portable.py"
@@ -229,10 +239,14 @@ def create_shortcut(home):
     if system == "Linux":
         desktop = Path.home() / "Desktop/Spine Mask Tool.desktop"
         desktop.parent.mkdir(parents=True, exist_ok=True)
-        script = home / "launch_spinemask_portable.py"
+        if getattr(sys, "frozen", False):
+            target = home / "SpineMaskInstaller"
+            command = "Exec=\"" + str(target) + "\"\\nTerminal=false\\n"
+        else:
+            script = home / "launch_spinemask_portable.py"
+            command = "Exec=python3 \"" + str(script) + "\" --launch\\nTerminal=true\\n"
         desktop.write_text(
-            "[Desktop Entry]\nType=Application\nName=Spine Mask Tool\n"
-            "Exec=python3 \"" + str(script) + "\" --launch\nTerminal=true\n",
+            "[Desktop Entry]\\nType=Application\\nName=Spine Mask Tool\\n" + command,
             encoding="utf-8"
         )
         desktop.chmod(0o700)
