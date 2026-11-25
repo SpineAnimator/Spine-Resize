@@ -63,6 +63,27 @@ class EditorDiscoveryTests(unittest.TestCase):
              patch.dict(os.environ, {"SPINE_MASK_RECENT_FILE": str(recent)}, clear=True):
             self.assertEqual(host.recent_editor_project(), self.project.resolve())
 
+    def test_portable_launcher_maps_all_desktop_platforms(self):
+        launcher_path = Path(__file__).with_name("launch_spinemask_portable.py")
+        spec = importlib.util.spec_from_file_location("spinemask_portable", launcher_path)
+        launcher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(launcher)
+        self.assertEqual(launcher.chrome_platform_key("Darwin", "arm64"), "mac-arm64")
+        self.assertEqual(launcher.chrome_platform_key("Darwin", "x86_64"), "mac-x64")
+        self.assertEqual(launcher.chrome_platform_key("Windows", "AMD64"), "win64")
+        self.assertEqual(launcher.chrome_platform_key("Linux", "x86_64"), "linux64")
+
+    def test_portable_extension_id_is_stable_and_chrome_compatible(self):
+        launcher_path = Path(__file__).with_name("launch_spinemask_portable.py")
+        spec = importlib.util.spec_from_file_location("spinemask_portable_id", launcher_path)
+        launcher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(launcher)
+        folder = Path(self.tmp.name) / "extension"
+        first = launcher.extension_id(folder)
+        self.assertEqual(first, launcher.extension_id(folder))
+        self.assertEqual(len(first), 32)
+        self.assertTrue(all("a" <= char <= "p" for char in first))
+
     def test_explicit_path_rejects_unsupported_file_types(self):
         unsupported = Path(self.tmp.name) / "notes.txt"
         unsupported.write_text("not a Spine project", encoding="utf-8")
