@@ -480,15 +480,23 @@ class SpineResizeAdapterTests(unittest.TestCase):
         self.unreferenced.write_bytes(PNG + b"unreferenced")
         skeleton_export = self.root / "skeleton.json"
         skeleton_export.write_text(json.dumps(build_json()), encoding="utf-8")
+        files = {
+            "skeleton.json": skeleton_export,
+            "images/face.png": self.face,
+            "images/part-a.png": self.part,
+        }
+        source_stat = self.project.stat()
         host.session = {
             "id": "resize-session-test",
             "created": time.time(),
             "source": self.project.resolve(),
             "sha256": hashlib.sha256(self.project.read_bytes()).hexdigest(),
-            "files": {
-                "skeleton.json": skeleton_export,
-                "images/face.png": self.face,
-                "images/part-a.png": self.part,
+            "source_size": source_stat.st_size,
+            "source_mtime_ns": source_stat.st_mtime_ns,
+            "files": files,
+            "file_snapshots": {
+                key: {"size": candidate.stat().st_size, "mtime_ns": candidate.stat().st_mtime_ns}
+                for key, candidate in files.items()
             },
         }
         host.resize_save_stage = None
