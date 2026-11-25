@@ -77,7 +77,22 @@ def editor_cli():
         candidates += [Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Spine/Spine.com",
                        Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Spine/Spine.exe"]
     else:
-        candidates += [Path.home() / "Spine/Spine.sh", Path("/opt/Spine/Spine.sh")]
+        # The licensed Ubuntu CI image records its exact Spine binary path here.
+        # Read the same pointer used by the native-editor round-trip workflow.
+        path_file = Path(os.environ.get(
+            "SPINE_MASK_EDITOR_CLI_PATH_FILE", "/opt/spine/Spine.sh.path"
+        )).expanduser()
+        try:
+            configured_path = path_file.read_text(encoding="utf-8").strip()
+            if configured_path:
+                candidates.append(Path(configured_path).expanduser())
+        except OSError:
+            pass
+        candidates += [
+            Path.home() / "Spine/Spine.sh",
+            Path("/opt/spine/Spine.sh"),
+            Path("/opt/Spine/Spine.sh"),
+        ]
     for name in ("Spine", "spine", "Spine.sh", "Spine.com"):
         exe = shutil.which(name)
         if exe:
