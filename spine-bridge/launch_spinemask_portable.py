@@ -22,7 +22,7 @@ import zipfile
 
 import install_spinemask_host
 
-URL = "https://spineanimator.github.io/Spine-Mask-Tool/"
+URLS = ("https://spineanimator.github.io/Spine-Mask-Tool/", "https://spineanimator.github.io/Spine-Resize/")
 METADATA_URL = "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json"
 EXTENSION_FILES = (
     "manifest.json", "background.js", "content.js", "mask-content.js",
@@ -193,7 +193,7 @@ def ensure_browser(home):
             binary.chmod(binary.stat().st_mode | 0o100)
         return binary
 
-    notify("Spine Mask Tool", "Downloading the isolated Chrome for Testing browser. This is a one-time setup.")
+    notify("Spine Mask + Resize", "Downloading the isolated Chrome for Testing browser. This is a one-time setup.")
     with urllib.request.urlopen(METADATA_URL, timeout=25) as response:
         metadata = json.loads(response.read().decode("utf-8"))
     stable = metadata.get("channels", {}).get("Stable", {})
@@ -228,7 +228,7 @@ def ensure_browser(home):
 def create_shortcut(home):
     system = platform.system()
     if system == "Darwin":
-        app = Path.home() / "Applications/Spine Mask Tool.app"
+        app = Path.home() / "Applications/Spine Mask + Resize.app"
         if getattr(sys, "frozen", False):
             source_app = Path(sys.executable).resolve().parents[2]
             if source_app.suffix == ".app" and source_app.is_dir():
@@ -249,7 +249,7 @@ def create_shortcut(home):
         info = {
             "CFBundleExecutable": "SpineMaskTool",
             "CFBundleIdentifier": "dev.spineanimator.spinemasktool",
-            "CFBundleName": "Spine Mask Tool",
+            "CFBundleName": "Spine Mask + Resize",
             "CFBundlePackageType": "APPL",
             "CFBundleShortVersionString": "1.0",
             "CFBundleVersion": "1.0",
@@ -258,7 +258,7 @@ def create_shortcut(home):
         (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
         return app
     if system == "Linux":
-        desktop = Path.home() / "Desktop/Spine Mask Tool.desktop"
+        desktop = Path.home() / "Desktop/Spine Mask + Resize.desktop"
         desktop.parent.mkdir(parents=True, exist_ok=True)
         if getattr(sys, "frozen", False):
             target = home / "SpineMaskInstaller"
@@ -267,13 +267,13 @@ def create_shortcut(home):
             script = home / "launch_spinemask_portable.py"
             command = "Exec=python3 \"" + str(script) + "\" --launch\nTerminal=true\n"
         desktop.write_text(
-            "[Desktop Entry]\nType=Application\nName=Spine Mask Tool\n" + command,
+            "[Desktop Entry]\nType=Application\nName=Spine Mask + Resize\n" + command,
             encoding="utf-8"
         )
         desktop.chmod(0o700)
         return desktop
     if system == "Windows":
-        desktop = Path.home() / "Desktop/Spine Mask Tool.lnk"
+        desktop = Path.home() / "Desktop/Spine Mask + Resize.lnk"
         desktop.parent.mkdir(parents=True, exist_ok=True)
         target = home / "SpineMaskInstaller.exe"
         quote = lambda value: "'" + str(value).replace("'", "''") + "'"
