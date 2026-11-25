@@ -1091,20 +1091,19 @@ def read_file_chunk(payload):
     root = active["source"].parent.resolve()
     if not requested.is_relative_to(root):
         raise ValueError("FILE_OUTSIDE_ACTIVE_PROJECT")
-    allowed = False
+    matched_key = None
     for key, candidate in active["files"].items():
         if key == "skeleton.json":
             continue
         try:
             if candidate.resolve(strict=True) == requested and requested.suffix.lower() in IMAGES:
-                allowed = True
+                matched_key = key
                 break
         except (OSError, RuntimeError):
             continue
-    if not allowed:
+    if matched_key is None:
         raise ValueError("FILE_NOT_REFERENCED_BY_ACTIVE_PROJECT")
-    snapshot = next((active["file_snapshots"].get(key) for key, candidate in active["files"].items()
-                     if key != "skeleton.json" and candidate.resolve(strict=True) == requested), None)
+    snapshot = active["file_snapshots"].get(matched_key)
     stat = requested.stat()
     if not snapshot or stat.st_size != snapshot["size"] or stat.st_mtime_ns != snapshot["mtime_ns"]:
         raise ValueError("SOURCE_IMAGE_CHANGED_RESTART_IMPORT")
