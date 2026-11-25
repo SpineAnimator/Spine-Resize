@@ -1140,7 +1140,8 @@ def begin_resize_save(payload):
     else:
         output_dir.mkdir(mode=0o700, parents=True, exist_ok=False)
     filename = payload.get("filename")
-    if not isinstance(filename, str) or not filename or Path(filename).name != filename:
+    if (not isinstance(filename, str) or not filename or Path(filename).name != filename
+            or "/" in filename or "\\" in filename):
         raise ValueError("INVALID_RESIZE_OUTPUT_FILENAME")
     if not filename.lower().endswith(".zip") or filename in (".", ".."):
         raise ValueError("RESIZE_OUTPUT_MUST_BE_A_ZIP_BUNDLE")
@@ -1200,6 +1201,12 @@ def finish_resize_save(payload):
         active["temp"].unlink(missing_ok=True)
         resize_save_stage = None
         raise ValueError("SOURCE_CHANGED_RESTART_IMPORT")
+    project_root = project_session["source"].parent.resolve()
+    output_dir = active["target"].parent
+    if output_dir.is_symlink() or not output_dir.resolve().is_relative_to(project_root):
+        active["temp"].unlink(missing_ok=True)
+        resize_save_stage = None
+        raise ValueError("UNSAFE_RESIZE_OUTPUT_DIRECTORY")
     if active["target"].exists():
         active["temp"].unlink(missing_ok=True)
         resize_save_stage = None
