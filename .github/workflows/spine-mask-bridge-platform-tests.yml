@@ -41,6 +41,7 @@ jobs:
           node --check spine-bridge/background.js
           node --check spine-bridge/content.js
           node --check spine-bridge/mask-content.js
+          node --test spine-bridge/test_spine_resize_content_bridge.mjs
       - name: Test native messaging and privacy regression suite on Linux
         if: runner.os == 'Linux'
         run: python spine-bridge/test_spinemaskbridge.py
