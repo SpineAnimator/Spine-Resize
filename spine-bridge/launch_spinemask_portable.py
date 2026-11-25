@@ -314,10 +314,34 @@ def launch_browser(binary, profile, extension):
     subprocess.Popen(args, **options)
 
 
+def verify_packaged_resources():
+    """Fail fast if a frozen one-click installer is missing its embedded host or extension."""
+    root = resource_dir()
+    asset_root = root / "assets" if (root / "assets" / "manifest.json").is_file() else root
+    missing = [name for name in EXTENSION_FILES if not (asset_root / name).is_file()]
+    host_name = "spinemaskbridge.exe" if platform.system() == "Windows" else "spinemaskbridge"
+    host = root / host_name
+    if not host.is_file():
+        missing.append(host_name)
+    elif platform.system() != "Windows" and not os.access(host, os.X_OK):
+        raise RuntimeError("Packaged Native Messaging host is not executable: " + host_name)
+    manifest_path = asset_root / "manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("manifest_version") != 3 or "nativeMessaging" not in manifest.get("permissions", []):
+            raise RuntimeError("Packaged extension manifest is not a valid Native Messaging MV3 extension.")
+    if missing:
+        raise RuntimeError("Packaged installer is missing resources: " + ", ".join(missing))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--launch", action="store_true", help="Launch the dedicated browser after installation")
+    parser.add_argument("--self-test", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.self_test:
+        verify_packaged_resources()
+        return 0
     try:
         home, extension, profile, identifier = install_bundle()
         binary = ensure_browser(home)
