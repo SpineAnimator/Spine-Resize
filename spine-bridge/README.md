@@ -17,7 +17,7 @@ The first setup downloads Chrome for Testing and may take a few minutes. Keep th
 - The Bridge discovers the saved project currently open in Spine Editor using the editor process and recent-project settings.
 - It reads the .spine file in bounded chunks and exports only skeleton-referenced image files.
 - It does not read arbitrary paths, unrelated files in the user's home folder, or unsaved in-memory editor state.
-- Spine Resize saves its result as a new copy in **SpineResizeResults/**; the source project is never overwritten.
+- Spine Resize saves the complete resized ZIP bundle in **SpineResizeResults/**; the source project is never overwritten.
 
 ## Headless Linux CI and coding agents
 
