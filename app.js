@@ -9251,21 +9251,8 @@ window.boneHierarchy = boneHierarchy;
         center: center.getAttribute("aria-pressed") === "true"
       });
       
-      // Write the resized project file back to the original location via the bridge.
-      if (bridgeProjectPath && typeof window.spineBridge !== 'undefined' && window.spineBridge) {
-        try {
-          const entry = result.entries.find(e => e.path === bridgeOriginalName);
-          if (entry) {
-            const saved = await window.spineBridge.saveFile(bridgeProjectPath, Array.from(entry.data));
-            if (saved?.ok && saved.path) {
-              line.replaceChildren(document.createTextNode(result.line + '  (saved safe copy: ' + saved.path + ')'));
-            }
-          }
-        } catch (err) {
-          console.warn('Bridge write-back failed:', err);
-        }
-      } else {
-        // Fallback: write back any entry whose source file had a fileHandle.
+      // Browser file handles are used only for files the user explicitly selected.
+      if (!bridgeProjectPath || typeof window.spineBridge === 'undefined' || !window.spineBridge) {
         for (const entry of result.entries) {
           const originalFile = files.find(f => f.name === entry.path);
           if (originalFile && originalFile.fileHandle) {
@@ -9273,15 +9260,29 @@ window.boneHierarchy = boneHierarchy;
               const writable = await originalFile.fileHandle.createWritable();
               await writable.write(entry.data);
               await writable.close();
-              console.log(`Written back: ${entry.path}`);
+              console.log('Written back: ' + entry.path);
             } catch (err) {
-              console.warn(`Failed to write back ${entry.path}:`, err);
+              console.warn('Failed to write back ' + entry.path + ':', err);
             }
           }
         }
       }
-      
+
       const blob = await zipEntries(result.entries);
+      // Save the complete, self-contained ZIP as a new file beside the source
+      // project. The Native Messaging host never overwrites the original.
+      if (bridgeProjectPath && window.spineBridge) {
+        try {
+          const bundleName = bridgeOriginalName.replace(/\.[^.]+$/, '') + '.resized.zip';
+          const bundleBytes = new Uint8Array(await blob.arrayBuffer());
+          const saved = await window.spineBridge.saveFile(bridgeProjectPath, bundleBytes, bundleName);
+          if (saved?.ok && saved.path) {
+            line.replaceChildren(document.createTextNode(result.line + '  (saved copy: ' + saved.path + ')'));
+          }
+        } catch (err) {
+          console.warn('Bridge bundle save failed:', err);
+        }
+      }
       revokeZip();
       const url = URL.createObjectURL(blob);
       zipUrl = url;
