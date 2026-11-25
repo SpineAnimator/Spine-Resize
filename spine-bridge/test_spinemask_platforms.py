@@ -3,6 +3,8 @@
 import importlib.util
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -72,6 +74,21 @@ class EditorDiscoveryTests(unittest.TestCase):
         self.assertEqual(launcher.chrome_platform_key("Darwin", "x86_64"), "mac-x64")
         self.assertEqual(launcher.chrome_platform_key("Windows", "AMD64"), "win64")
         self.assertEqual(launcher.chrome_platform_key("Linux", "x86_64"), "linux64")
+
+    def test_agent_cli_exposes_inspect_extract_and_apply_without_browser(self):
+        cli = Path(__file__).with_name("agent_cli.py")
+        result = subprocess.run([sys.executable, str(cli), "--help"],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("inspect", result.stdout)
+        self.assertIn("extract", result.stdout)
+        self.assertIn("apply", result.stdout)
+
+    def test_release_has_double_click_installers_for_each_desktop_os(self):
+        root = Path(__file__).parent
+        for name in ("INSTALL.command", "INSTALL.bat", "INSTALL.sh",
+                     "launch_spinemask_portable.py", "README.md"):
+            self.assertTrue((root / name).is_file(), name + " is missing from the release source")
 
     def test_portable_extension_id_is_stable_and_chrome_compatible(self):
         launcher_path = Path(__file__).with_name("launch_spinemask_portable.py")
