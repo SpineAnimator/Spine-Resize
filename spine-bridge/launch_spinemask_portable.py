@@ -323,10 +323,10 @@ def main():
         binary = ensure_browser(home)
         shortcut = create_shortcut(home)
         launch_browser(binary, profile, extension)
-        notify("Spine Mask Tool", "Bridge installed and ready.\nExtension ID: " + identifier +
+        notify("Spine Mask + Resize", "Bridge installed and ready.\nExtension ID: " + identifier +
                "\nShortcut: " + str(shortcut) + "\nThe dedicated browser is opening.")
     except Exception as error:
-        notify("Spine Mask Tool installation failed", str(error), error=True)
+        notify("Spine Mask + Resize installation failed", str(error), error=True)
         raise
 
 
