@@ -151,11 +151,17 @@ def install_bundle():
     if system == "Windows":
         install_spinemask_host.install({identifier}, profile)
     else:
-        # Chrome Native Messaging uses the OS-standard host registry location.
-        # Also register against the dedicated user-data directory for CFT builds
-        # that resolve native host manifests relative to their isolated profile.
-        install_spinemask_host.install({identifier}, install_spinemask_host.chrome_data())
-        install_spinemask_host.install({identifier}, profile)
+        # Register both the OS-standard location and browser-channel-specific
+        # NativeMessagingHosts locations used by Chrome for Testing/Chromium.
+        candidates = [install_spinemask_host.chrome_data(), profile]
+        if system == "Darwin":
+            google = Path.home() / "Library/Application Support/Google"
+            candidates.extend([google / "Chrome for Testing", google / "ChromeForTesting"])
+        elif system == "Linux":
+            config = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+            candidates.extend([config / "google-chrome-for-testing", config / "chromium"])
+        for data_dir in dict.fromkeys(candidates):
+            install_spinemask_host.install({identifier}, data_dir)
 
     return home, extension, profile, identifier
 
