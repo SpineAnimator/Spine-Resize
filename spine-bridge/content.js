@@ -169,12 +169,12 @@
       return { path, data };
     },
 
-    async saveFile(path, bytes) {
+    async saveFile(path, bytes, filename) {
       if (!projectSession) throw new Error("No active Spine project session");
       const input = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-      if (!input.length || input.length > 32 * 1024 * 1024) throw new Error("Spine Resize output size limit");
+      if (!input.length || input.length > 128 * 1024 * 1024) throw new Error("Spine Resize output size limit");
       const stage = await send("begin_resize_save", {
-        session: projectSession, path, size: input.length
+        session: projectSession, path, size: input.length, filename
       });
       if (!stage?.stage || !stage.path) throw new Error("Could not start safe Spine Resize save");
       for (let offset = 0; offset < input.length; offset += CHUNK) {
