@@ -38,7 +38,7 @@ test("page-world API uses postMessage and unwraps extension responses", async ()
   window.dispatchMessage({ channel: "spine-resize-native-v1", type: "ready", version: 1 });
 
   const pending = window.spineBridge.getOpenFilePath();
-  await Promise.resolve();
+  await new Promise(resolve => setTimeout(resolve, 0));
   const request = sent.findLast(message => message.type === "request");
   assert.ok(request);
   assert.equal(request.method, "get_open_file_path");
