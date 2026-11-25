@@ -1,92 +1,35 @@
-# Spine Resize Bridge Installation Guide
+# Spine Bridge — one-click installation
 
-## The Problem
-The "with Spine" button requires a native messaging host (`spinebridge.py`) to be installed and registered with Chrome. This allows the extension to communicate with the Spine editor to automatically find and load your project.
+The same Native Messaging host powers both **Spine Resize** and **Spine Mask Tool**. It automatically discovers the saved project currently open in Spine Editor and reads only the images referenced by that project's skeleton.
 
-## Quick Install (macOS)
+## Install
 
-### Option 1: Automated Script
-```bash
-cd /Volumes/Work/SpineSkeletonResize/sr/SpineResize/Spine-Resize/spine-bridge
-./install_native_host.sh
-```
+1. Download the [Spine Mask + Resize Bridge ZIP](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Resize-Bridge.zip).
+2. Extract the ZIP.
+3. Double-click the launcher for your operating system:
+   - macOS: **INSTALL.command**
+   - Windows: **INSTALL.bat**
+   - Linux: **INSTALL.desktop**
+4. Keep an internet connection during first setup. The installer downloads Chrome for Testing, registers the Native Messaging host, loads the extension into a dedicated browser profile and opens the site.
 
-### Option 2: Manual Install
-1. Create the native messaging host directory:
-   ```bash
-   mkdir -p ~/Library/Application\ Support/Google/Chrome/NativeMessagingHosts
-   ```
+No Python installation, terminal commands, extension developer mode or manual manifest editing is required. The installer does not modify the user's normal Chrome profile.
 
-2. Copy the manifest (update the path to your actual spinebridge.py location):
-   ```json
-   {
-     "name": "spinebridge",
-     "description": "Spine Resize Bridge native messaging host",
-     "path": "/Volumes/Work/SpineSkeletonResize/sr/SpineResize/Spine-Resize/spine-bridge/spinebridge.py",
-     "type": "stdio",
-     "allowed_origins": ["chrome-extension://*"]
-   }
-   ```
-   Save as: `~/Library/Application Support/Google/Chrome/NativeMessagingHosts/spinebridge.json`
+## Use with Spine
 
-3. Make the Python script executable:
-   ```bash
-   chmod +x /Volumes/Work/SpineSkeletonResize/sr/SpineResize/Spine-Resize/spine-bridge/spinebridge.py
-   ```
+1. Open the project in Spine Editor.
+2. Save the project so the latest changes are on disk.
+3. Open the site in the dedicated **Spine Mask + Resize** browser window.
+4. Click **with Spine** (Resize) or **Import open project** (Mask).
 
-## Quick Install (Windows)
+The bridge reads the saved .spine project and only the image files referenced by its skeleton. It cannot read unsaved in-memory editor changes; save in Spine before importing.
 
-Run as Administrator:
-```cmd
-cd spine-bridge
-install_native_host.bat
-```
+Spine Resize writes the resized project as a separate copy under **SpineResizeResults/** beside the original project. The original file is not overwritten.
 
-Or manually:
-1. Create manifest at: `%LOCALAPPDATA%\Google\Chrome\User Data\NativeMessagingHosts\spinebridge.json`
-2. Point `path` to your `spinebridge.py`
+## Security
 
-## Install Chrome Extension
+- The Native Messaging manifest authorizes only the exact extension ID.
+- File reads are limited to the active project and its referenced image files.
+- Resize output is written to a new file inside **SpineResizeResults/**; arbitrary paths and overwriting the source project are rejected.
+- The browser uses an isolated Chrome for Testing profile. It does not silently install an unsigned extension into the user's everyday browser.
 
-1. Open Chrome and go to `chrome://extensions`
-2. Enable **Developer mode** (top right toggle)
-3. Click **Load unpacked**
-4. Select the `spine-bridge` folder (or drag the `spine-resize-bridge.zip` to the page)
-5. The "Spine Resize Bridge" extension should appear
-
-## Verify Installation
-
-1. **Restart Chrome completely** (quit and reopen)
-2. Open the Spine Skeleton Resize website
-3. Open Spine editor with your project
-4. Click "with Spine" button
-5. It should automatically load your project
-
-## How It Works (Automatic)
-
-Once installed, the bridge:
-1. **Detects running Spine** via AppleScript (macOS) or process check
-2. **Gets the front document path** from Spine directly
-3. **Falls back** to scanning Documents/Desktop/Downloads for recent `.spine`, `.skel`, `.json` files
-4. **Loads the project + all sibling images** automatically
-5. **Shows the bone tree** immediately for selection
-6. **Saves resized files back** to the original location via the bridge
-
-## Troubleshooting
-
-**"Specified native messaging host not found"**
-- The manifest isn't in the right location
-- Restart Chrome after installing manifest
-
-**"native host not available"**
-- Check Python is installed: `python3 --version`
-- Check script is executable: `chmod +x spinebridge.py`
-- Check manifest `path` is absolute and correct
-
-**"Spine bridge not found"**
-- Extension not installed or not loaded
-- Check `chrome://extensions` - "Spine Resize Bridge" should be enabled
-
-**No project found**
-- Make sure Spine is running with a project open
-- Or have a recent `.spine`/`.json` file in Documents/Desktop/Downloads
+macOS Gatekeeper or Windows SmartScreen may show the operating system's standard confirmation because the installer is not signed with a paid publisher certificate.
