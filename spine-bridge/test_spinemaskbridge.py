@@ -244,6 +244,27 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertLessEqual(len(message), 1300)
         self.assertIn("[redacted]", message)
 
+    def test_native_import_failure_returns_create_failed_diagnostic(self):
+        original = self.project.read_bytes()
+        opened = host.open_project({})
+        output = json.dumps(clip_json()).encode("utf-8")
+        staged = host.begin_result({"session": opened["session"], "files": [
+            {"name": "mask.json", "size": len(output)}
+        ]})
+        host.write_chunk({"stage": staged["stage"], "name": "mask.json", "offset": 0,
+                          "base64": base64.b64encode(output).decode("ascii")})
+        failure = subprocess.CompletedProcess(
+            ["Spine", "--import"], 17, "Starting import\\n", "Create failed: unsupported attachment"
+        )
+        with patch.object(host, "editor_cli", return_value="/fake/Spine"), \\
+             patch.object(host.subprocess, "run", return_value=failure):
+            done = host.commit_result({"session": opened["session"], "stage": staged["stage"],
+                                       "openEditor": True})
+        self.assertTrue(done["saved"], "the separate JSON project should remain available")
+        self.assertFalse(done["imported"])
+        self.assertIn("Create failed: unsupported attachment", done["editorError"])
+        self.assertEqual(self.project.read_bytes(), original, "source project must remain unchanged")
+
     def test_ping_capabilities_are_platform_aware(self):
         with patch.object(host.platform,"system",return_value="Darwin"):
             mac=host.HANDLERS["ping"]({})
