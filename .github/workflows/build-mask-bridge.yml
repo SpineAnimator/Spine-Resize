@@ -270,6 +270,23 @@ jobs:
           cd dist
           zip -q -X -r Spine-Mask-Resize-Bridge.zip spine-mask-resize-bridge
           unzip -t Spine-Mask-Resize-Bridge.zip >/dev/null
+          mkdir -p platform-windows platform-macos/macos platform-linux/linux
+          cp ../windows-host/SpineMaskInstaller.exe platform-windows/SpineMaskInstaller.exe
+          cp -R ../macos-host/SpineMaskInstaller.app platform-macos/macos/
+          cp ../spine-bridge/INSTALL.command platform-macos/INSTALL.command
+          (cd platform-macos && zip -q -X -r ../Spine-Mask-Bridge-macOS.zip .)
+          cp ../linux-host/SpineMaskInstaller platform-linux/linux/
+          cp ../linux-host/spinemaskbridge platform-linux/linux/
+          cp ../spine-bridge/INSTALL.desktop platform-linux/INSTALL.desktop
+          cp ../spine-bridge/README.md platform-linux/README.md
+          chmod 755 platform-linux/INSTALL.desktop platform-linux/linux/SpineMaskInstaller platform-linux/linux/spinemaskbridge
+          tar -czf Spine-Mask-Bridge-Linux.tar.gz -C platform-linux .
+          unzip -t Spine-Mask-Bridge-macOS.zip >/dev/null
+          tar -tzf Spine-Mask-Bridge-Linux.tar.gz >/dev/null
+          test -s platform-windows/SpineMaskInstaller.exe
+          test -s Spine-Mask-Bridge-macOS.zip
+          test -s Spine-Mask-Bridge-Linux.tar.gz
+          echo 'SPINE_MASK_DIRECT_PLATFORM_INSTALLERS_PASS'
           test "$(unzip -Z1 Spine-Mask-Resize-Bridge.zip | awk '/\.(png|jpg|jpeg|psd|spine)$/ && !/icon_/ {n++} END{print n+0}')" -eq 0
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq windows/spinemaskbridge.exe
           unzip -Z1 Spine-Mask-Resize-Bridge.zip | grep -Fq windows/SpineMaskInstaller.exe
@@ -303,5 +320,8 @@ jobs:
               --target main
           fi
           gh release upload "$TAG" "dist/Spine-Mask-Resize-Bridge.zip" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$TAG" "dist/platform-windows/SpineMaskInstaller.exe" \
+            "dist/Spine-Mask-Bridge-macOS.zip" "dist/Spine-Mask-Bridge-Linux.tar.gz" \
             --repo "$GITHUB_REPOSITORY" --clobber
           echo "SPINE_MASK_RELEASE_PASS https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
