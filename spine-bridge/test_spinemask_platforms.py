@@ -184,7 +184,7 @@ class EditorDiscoveryTests(unittest.TestCase):
         ):
             opened, route = host.verified_open_in_spine(self.project)
         self.assertTrue(opened)
-        self.assertEqual(route, "existing_instance")
+        self.assertEqual(route, "originating_instance")
         self.assertEqual(run.call_args.args[0], ["/usr/bin/xdg-open", str(self.project.resolve())])
 
     def test_windows_existing_editor_opens_result_and_verifies_same_process(self):
@@ -197,7 +197,7 @@ class EditorDiscoveryTests(unittest.TestCase):
         ):
             opened, route = host.verified_open_in_spine(self.project)
         self.assertTrue(opened)
-        self.assertEqual(route, "existing_instance")
+        self.assertEqual(route, "originating_instance")
         startfile.assert_called_once_with(str(self.project.resolve()))
 
 
