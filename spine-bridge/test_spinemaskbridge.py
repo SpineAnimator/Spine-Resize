@@ -256,7 +256,7 @@ class NativeBridgeTests(unittest.TestCase):
         failure = subprocess.CompletedProcess(
             ["Spine", "--import"], 17, "Starting import\\n", "Create failed: unsupported attachment"
         )
-        with patch.object(host, "editor_cli", return_value="/fake/Spine"), \\
+        with patch.object(host, "editor_cli", return_value="/fake/Spine"), \
              patch.object(host.subprocess, "run", return_value=failure):
             done = host.commit_result({"session": opened["session"], "stage": staged["stage"],
                                        "openEditor": True})
