@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -170,6 +171,34 @@ class EditorDiscoveryTests(unittest.TestCase):
             path, found_by = host.spine_open_path()
         self.assertIsNone(path)
         self.assertEqual(found_by, "configured_project_not_found")
+
+
+    def test_linux_existing_editor_opens_result_and_verifies_same_process(self):
+        with (
+            patch.object(host.platform, "system", return_value="Linux"),
+            patch.object(host, "spine_editor_instance_pids", side_effect=[["4242"], ["4242"]]),
+            patch.object(host, "recent_editor_project", return_value=None),
+            patch.object(host, "wait_for_editor_open", return_value=True),
+            patch.object(host.shutil, "which", return_value="/usr/bin/xdg-open"),
+            patch.object(host.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run,
+        ):
+            opened, route = host.verified_open_in_spine(self.project)
+        self.assertTrue(opened)
+        self.assertEqual(route, "existing_instance")
+        self.assertEqual(run.call_args.args[0], ["/usr/bin/xdg-open", str(self.project.resolve())])
+
+    def test_windows_existing_editor_opens_result_and_verifies_same_process(self):
+        with (
+            patch.object(host.platform, "system", return_value="Windows"),
+            patch.object(host, "spine_editor_instance_pids", side_effect=[["4242"], ["4242"]]),
+            patch.object(host, "recent_editor_project", return_value=None),
+            patch.object(host, "wait_for_editor_open", return_value=True),
+            patch.object(host.os, "startfile", create=True) as startfile,
+        ):
+            opened, route = host.verified_open_in_spine(self.project)
+        self.assertTrue(opened)
+        self.assertEqual(route, "existing_instance")
+        startfile.assert_called_once_with(str(self.project.resolve()))
 
 
 if __name__ == "__main__":
