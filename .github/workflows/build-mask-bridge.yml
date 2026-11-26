@@ -268,13 +268,13 @@ jobs:
           node spine-bridge/test_mask_extension.mjs
           bash -n spine-bridge/INSTALL.command spine-bridge/INSTALL.sh
           cd dist
-          zip -q -X -r Spine-Mask-Resize-Bridge.zip spine-mask-resize-bridge
+          zip -q -X -y -r Spine-Mask-Resize-Bridge.zip spine-mask-resize-bridge
           unzip -t Spine-Mask-Resize-Bridge.zip >/dev/null
           mkdir -p platform-windows platform-macos/macos platform-linux/linux
           cp ../windows-host/SpineMaskInstaller.exe platform-windows/Spine-Mask-Bridge-Windows.exe
           cp -R ../macos-host/SpineMaskInstaller.app platform-macos/macos/
           cp ../spine-bridge/INSTALL.command platform-macos/INSTALL.command
-          (cd platform-macos && zip -q -X -r ../Spine-Mask-Bridge-macOS.zip .)
+          (cd platform-macos && zip -q -X -y -r ../Spine-Mask-Bridge-macOS.zip .)
           cp ../linux-host/SpineMaskInstaller platform-linux/linux/
           cp ../linux-host/spinemaskbridge platform-linux/linux/
           cp ../spine-bridge/INSTALL.desktop platform-linux/INSTALL.desktop
