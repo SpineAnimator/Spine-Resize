@@ -65,6 +65,17 @@ def spine_cli_license_input():
     return (license_value + "\n") if license_value else None
 
 
+def editor_import_error(process):
+    """Return a bounded, license-redacted diagnostic from a failed Editor CLI import."""
+    detail = str(process.stderr or process.stdout or "No diagnostic was returned.").strip()
+    detail = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", detail)
+    license_value = os.environ.get("SPINE_LICENSE", "").strip()
+    if license_value:
+        detail = detail.replace(license_value, "[redacted]")
+    detail = detail[:1200].strip()
+    return "Spine Editor import failed (exit " + str(process.returncode) + "): " + detail
+
+
 def editor_cli():
     candidates = []
     override = os.environ.get("SPINE_MASK_EDITOR_CLI")
@@ -933,6 +944,7 @@ def commit_result(payload):
         cli = editor_cli()
         output = folder / (active["source"].stem + "-mask.spine")
         imported = False
+        editor_error = None
         if cli:
             command = [cli, "--update", "4.3.26", "--input", str(json_out),
                        "--output", str(output), "--import"]
@@ -940,8 +952,14 @@ def commit_result(payload):
                 proc = subprocess.run(command, input=spine_cli_license_input() or "\n",
                                       capture_output=True, text=True, timeout=180)
                 imported = proc.returncode == 0 and output.is_file() and output.stat().st_size > 0
-            except (subprocess.TimeoutExpired, OSError):
-                imported = False
+                if not imported:
+                    editor_error = editor_import_error(proc)
+            except subprocess.TimeoutExpired:
+                editor_error = "Spine Editor import timed out after 180 seconds."
+            except OSError as exc:
+                editor_error = "Spine Editor could not be started: " + str(exc)[:500]
+        else:
+            editor_error = "Licensed Spine Editor CLI was not found on this computer."
         opened = False
         open_route = "not_requested"
         if imported and payload.get("openEditor", True):
@@ -950,6 +968,7 @@ def commit_result(payload):
                 "openVerification": open_route,
                 "project": output.name if imported else None,
                 "json": json_out.name, "location": str(folder),
+                "editorError": None if imported else editor_error,
                 "note": "Original project remains untouched"}
     finally:
         shutil.rmtree(stage["temp"], ignore_errors=True)
