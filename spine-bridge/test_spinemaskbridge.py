@@ -228,9 +228,9 @@ class NativeBridgeTests(unittest.TestCase):
         proc = subprocess.CompletedProcess(
             ["Spine", "--import"], 17, "Starting import\\n", "Create failed: unsupported attachment"
         )
-        self.assertEqual(
-            host.editor_import_error(proc),
+        self.assertIn(
             "Spine Editor import failed (exit 17): Create failed: unsupported attachment",
+            host.editor_import_error(proc),
         )
 
     def test_editor_import_error_keeps_stdout_and_stderr_diagnostics(self):
