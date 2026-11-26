@@ -72,7 +72,7 @@ def editor_import_error(process):
     license_value = os.environ.get("SPINE_LICENSE", "").strip()
     if license_value:
         detail = detail.replace(license_value, "[redacted]")
-    detail = detail[-1200:].strip()
+    detail = detail[:1200].strip()
     return "Spine Editor import failed (exit " + str(process.returncode) + "): " + detail
 
 
