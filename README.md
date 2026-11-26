@@ -22,7 +22,7 @@ Geometry (bone positions, lengths, attachment sizes, mesh vertices, animation tr
 3. Set target size (300 by default)
 4. Click **Resize**
 
-For a project already open in Spine Editor, install the [one-click Spine Mask + Resize Bridge](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Resize-Bridge.zip), open the dedicated browser and click **with Spine**. Save the project in Spine before importing; the bridge reads the saved project and its referenced images.
+For a project already open in Spine Editor, install the Bridge without a terminal: [Windows installer](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Bridge-Windows.exe), [macOS installer](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Bridge-macOS.zip), or [Linux installer](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Bridge-Linux.tar.gz). Open the dedicated browser and click **with Spine**. Save the project in Spine before importing; the bridge reads the saved project and its referenced images.
 
 The resulting ZIP contains the scaled JSON, resized PNGs and (if present) a scaled atlas. When using the Bridge, a copy is also saved under **SpineResizeResults/** beside the original project.
 
