@@ -2,17 +2,17 @@
 
 The same Native Messaging host powers both **Spine Resize** and **Spine Mask Tool**. It automatically discovers the saved project currently open in Spine Editor and reads only the images referenced by that project's skeleton.
 
-## Install
+## Install without a terminal
 
-1. Download the [Spine Mask + Resize Bridge ZIP](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Resize-Bridge.zip).
-2. Extract the ZIP.
-3. Double-click the launcher for your operating system:
-   - macOS: **INSTALL.command**
-   - Windows: **INSTALL.bat**
-   - Linux: **INSTALL.desktop**
-4. Keep an internet connection during first setup. The installer downloads Chrome for Testing, registers the Native Messaging host, loads the extension into a dedicated browser profile and opens the site.
+Download the installer for your operating system:
 
-No Python installation, terminal commands, extension developer mode or manual manifest editing is required. The installer does not modify the user's normal Chrome profile.
+- **Windows:** [Spine-Mask-Bridge-Windows.exe](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Bridge-Windows.exe) — double-click the downloaded EXE.
+- **macOS:** [Spine-Mask-Bridge-macOS.zip](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Bridge-macOS.zip) — extract it, then double-click **INSTALL.command**.
+- **Linux:** [Spine-Mask-Bridge-Linux.tar.gz](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Bridge-Linux.tar.gz) — extract it, then double-click **INSTALL.desktop**.
+
+Keep an internet connection during first setup. The installer downloads Chrome for Testing, registers the Native Messaging host, loads the extension into a dedicated browser profile and opens the site. No Python installation, terminal commands, extension developer mode or manual manifest editing is required. The installer does not modify the user's normal Chrome profile.
+
+For advanced/manual setup, the [complete Bridge ZIP](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Resize-Bridge.zip) remains available.
 
 ## Use with Spine
 
@@ -32,4 +32,4 @@ Spine Resize writes a self-contained resized ZIP bundle under **SpineResizeResul
 - Resize output is written to a new file inside **SpineResizeResults/**; arbitrary paths and overwriting the source project are rejected.
 - The browser uses an isolated Chrome for Testing profile. It does not silently install an unsigned extension into the user's everyday browser.
 
-macOS Gatekeeper or Windows SmartScreen may show the operating system's standard confirmation because the installer is not signed with a paid publisher certificate.
+macOS Gatekeeper or Windows SmartScreen may show the operating system's standard confirmation because the installer is not signed with a paid publisher certificate. This is an OS confirmation, not a terminal step.
