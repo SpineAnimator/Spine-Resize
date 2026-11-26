@@ -233,6 +233,16 @@ class NativeBridgeTests(unittest.TestCase):
             "Spine Editor import failed (exit 17): Create failed: unsupported attachment",
         )
 
+    def test_editor_import_error_keeps_stdout_and_stderr_diagnostics(self):
+        proc = subprocess.CompletedProcess(
+            ["Spine", "--import"], 17,
+            "Create failed: attachment could not be created",
+            "Warning: editor fallback was used",
+        )
+        message = host.editor_import_error(proc)
+        self.assertIn("Create failed: attachment could not be created", message)
+        self.assertIn("Warning: editor fallback was used", message)
+
     def test_editor_import_failure_redacts_license_and_bounds_diagnostic(self):
         secret = "test-license-secret"
         proc = subprocess.CompletedProcess(
