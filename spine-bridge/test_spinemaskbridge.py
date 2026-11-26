@@ -381,7 +381,8 @@ class NativeBridgeTests(unittest.TestCase):
             self.assertEqual(argv[1],"-f")
             self.assertEqual(argv[2],r"/Spine\.app/Contents/MacOS/Spine( |$)")
             return CompletedProcess(argv,0,"99800\nnot-a-pid\n99801\n","")
-        with patch.object(host.subprocess,"run",side_effect=fake_run):
+        with patch.object(host.platform,"system",return_value="Darwin"), \
+             patch.object(host.subprocess,"run",side_effect=fake_run):
             self.assertEqual(host.spine_editor_instance_pids(),["99800","99801"])
 
     def test_editor_open_targets_only_the_originating_instance(self):
@@ -408,7 +409,7 @@ class NativeBridgeTests(unittest.TestCase):
                 opened,route=host.verified_open_in_spine(self.project)
                 self.assertTrue(opened)
                 self.assertEqual(route,"originating_instance")
-                wait.assert_called_once_with(self.project.resolve(),seconds=12)
+                wait.assert_called_once_with(self.project.resolve(),seconds=20)
                 self.assertEqual(calls.call_count,1)
                 self.assertEqual(calls.call_args.args[0][:3],["open","-a","/Applications/Spine.app"])
 
@@ -439,14 +440,26 @@ class NativeBridgeTests(unittest.TestCase):
                 self.assertEqual(route,"multiple_editors_manual_selection_required")
                 proc.assert_not_called()
 
-    def test_other_platforms_do_not_launch_a_second_spine_instance(self):
+    def test_other_platforms_open_through_the_desktop_handler_and_keep_the_same_pid(self):
         for system in ("Linux","Windows"):
-            with patch.object(host.platform,"system",return_value=system), \
-                 patch.object(host.subprocess,"Popen") as popen:
-                opened,route=host.verified_open_in_spine(self.project)
-                self.assertFalse(opened)
-                self.assertEqual(route,"same_editor_open_not_supported_on_platform")
-                popen.assert_not_called()
+            common = (
+                patch.object(host.platform,"system",return_value=system),
+                patch.object(host,"spine_editor_instance_pids",side_effect=[["99800"],["99800"]]),
+                patch.object(host,"recent_editor_project",return_value=None),
+                patch.object(host,"wait_for_editor_open",return_value=True),
+            )
+            with common[0], common[1], common[2], common[3]:
+                if system == "Linux":
+                    with patch.object(host.shutil,"which",return_value="/usr/bin/xdg-open"), \
+                         patch.object(host.subprocess,"run",return_value=subprocess.CompletedProcess([],0,"","")) as run:
+                        opened,route=host.verified_open_in_spine(self.project)
+                        self.assertEqual(run.call_args.args[0],["/usr/bin/xdg-open",str(self.project.resolve())])
+                else:
+                    with patch.object(host.os,"startfile",create=True) as startfile:
+                        opened,route=host.verified_open_in_spine(self.project)
+                        startfile.assert_called_once_with(str(self.project.resolve()))
+                self.assertTrue(opened)
+                self.assertEqual(route,"originating_instance")
 
     def test_no_unbounded_discovery(self):
         host.session=None
