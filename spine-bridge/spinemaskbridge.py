@@ -762,26 +762,86 @@ def wait_for_editor_open(project, seconds=12):
 
 
 def spine_editor_instance_pids():
-    """Return the running Spine 4.3 GUI process IDs, not batch CLI jobs."""
-    result = subprocess.run(
-        ["pgrep", "-f", r"/Spine\.app/Contents/MacOS/Spine( |$)"],
-        capture_output=True, text=True, timeout=4
-    )
-    return sorted({line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()})
+    """Return GUI Spine Editor PIDs on desktop OSes, excluding batch CLI jobs."""
+    system = platform.system()
+    if system == "Darwin":
+        result = subprocess.run(
+            ["pgrep", "-f", r"/Spine\.app/Contents/MacOS/Spine( |$)"],
+            capture_output=True, text=True, timeout=4
+        )
+        return sorted({line.strip() for line in result.stdout.splitlines()
+                       if line.strip().isdigit()})
+
+    if system == "Linux":
+        pids = []
+        try:
+            entries = list(Path("/proc").iterdir())
+        except OSError:
+            return pids
+        for entry in entries:
+            if not entry.name.isdigit():
+                continue
+            try:
+                raw = (entry / "cmdline").read_bytes()
+                args = [os.fsdecode(value) for value in raw.split(b"\0") if value]
+                if not args:
+                    continue
+                executable = Path(args[0]).name.casefold()
+                joined = " ".join(args).casefold()
+                is_editor = (
+                    "com.esotericsoftware.spine" in joined
+                    or ("spine" in executable and executable not in {"bash", "sh", "dash"})
+                )
+                if (not is_editor or "spinemaskbridge" in joined
+                        or any(flag in args for flag in ("--input", "--output", "--export", "--import"))):
+                    continue
+                pids.append(entry.name)
+            except OSError:
+                continue
+        return sorted(pids)
+
+    if system == "Windows":
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if not powershell:
+            return []
+        script = (
+            "$items = @(Get-CimInstance Win32_Process | "
+            "Where-Object { $_.Name -eq 'Spine.exe' -or $_.Name -eq 'Spine.com' } | "
+            "Select-Object ProcessId,CommandLine); "
+            "ConvertTo-Json -InputObject $items -Compress"
+        )
+        try:
+            result = subprocess.run([powershell, "-NoProfile", "-Command", script],
+                                    capture_output=True, text=True, timeout=5)
+            if result.returncode != 0 or not result.stdout.strip():
+                return []
+            items = json.loads(result.stdout)
+            if isinstance(items, dict):
+                items = [items]
+            pids = []
+            for item in items if isinstance(items, list) else []:
+                command = str(item.get("CommandLine") or "")
+                args = windows_command_line_args(command)
+                if any(flag in args for flag in ("--input", "--output", "--export", "--import")):
+                    continue
+                pid = item.get("ProcessId")
+                if pid is not None:
+                    pids.append(str(pid))
+            return sorted(set(pids))
+        except (OSError, subprocess.TimeoutExpired, ValueError, json.JSONDecodeError):
+            return []
+    return []
 
 
 def verified_open_in_spine(project, editor_cli_path=None):
-    """Open only in the already-running originating Spine Editor instance.
+    """Open a result in the one already-running Spine Editor and verify its PID.
 
-    Never launch a second Editor process. On macOS, the project source is
-    discovered from the running Editor, and open -a sends the new .spine
-    document to that existing application. Success requires both the recent
-    project path and the same GUI PID before and after the open request.
+    Desktop file handlers route the document to the existing application on
+    Windows and Linux; macOS uses Launch Services. Success requires the recent
+    project path to update and the original GUI PID to remain unchanged.
     """
     project = Path(project).resolve()
-    if platform.system() != "Darwin":
-        # Shell-opening a file can silently start a second Spine process. That
-        # is not the requested same-editor handoff, so fail closed here.
+    if platform.system() not in ("Darwin", "Windows", "Linux"):
         return False, "same_editor_open_not_supported_on_platform"
 
     try:
@@ -796,12 +856,30 @@ def verified_open_in_spine(project, editor_cli_path=None):
         return True, "already_open_in_originating_instance"
 
     try:
-        request = subprocess.run(
-            ["open", "-a", "/Applications/Spine.app", str(project)],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-        if request.returncode != 0:
-            return False, "existing_instance_open_request_failed"
-        if not wait_for_editor_open(project, seconds=12):
+        system = platform.system()
+        if system == "Darwin":
+            request = subprocess.run(
+                ["open", "-a", "/Applications/Spine.app", str(project)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            if request.returncode != 0:
+                return False, "existing_instance_open_request_failed"
+        elif system == "Windows":
+            os.startfile(str(project))
+        else:
+            opener = shutil.which("xdg-open")
+            if opener:
+                command = [opener, str(project)]
+            else:
+                gio = shutil.which("gio")
+                if not gio:
+                    return False, "desktop_file_opener_unavailable"
+                command = [gio, "open", str(project)]
+            request = subprocess.run(
+                command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            if request.returncode != 0:
+                return False, "existing_instance_open_request_failed"
+
+        if not wait_for_editor_open(project, seconds=20):
             return False, "existing_instance_open_not_confirmed"
         after = spine_editor_instance_pids()
         if after != before:
