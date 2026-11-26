@@ -224,6 +224,26 @@ class NativeBridgeTests(unittest.TestCase):
         self.assertEqual(exported["skins"][0]["attachments"]["auto_mask_original"]["clip"]["end"],"original")
         self.assertIn("idle",exported["animations"])
 
+    def test_editor_import_failure_keeps_actionable_cli_diagnostic(self):
+        proc = subprocess.CompletedProcess(
+            ["Spine", "--import"], 17, "Starting import\\n", "Create failed: unsupported attachment"
+        )
+        self.assertEqual(
+            host.editor_import_error(proc),
+            "Spine Editor import failed (exit 17): Create failed: unsupported attachment",
+        )
+
+    def test_editor_import_failure_redacts_license_and_bounds_diagnostic(self):
+        secret = "test-license-secret"
+        proc = subprocess.CompletedProcess(
+            ["Spine"], 1, "", "Create failed: " + secret + " " + ("x" * 2000)
+        )
+        with patch.dict(os.environ, {"SPINE_LICENSE": secret}):
+            message = host.editor_import_error(proc)
+        self.assertNotIn(secret, message)
+        self.assertLessEqual(len(message), 1300)
+        self.assertIn("[redacted]", message)
+
     def test_ping_capabilities_are_platform_aware(self):
         with patch.object(host.platform,"system",return_value="Darwin"):
             mac=host.HANDLERS["ping"]({})
