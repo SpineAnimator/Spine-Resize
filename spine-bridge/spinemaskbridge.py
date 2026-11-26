@@ -766,7 +766,7 @@ def spine_editor_instance_pids():
     system = platform.system()
     if system == "Darwin":
         result = subprocess.run(
-            ["pgrep", "-f", r"/Spine\\.app/Contents/MacOS/Spine( |$)"],
+            ["pgrep", "-f", r"/Spine\.app/Contents/MacOS/Spine( |$)"],
             capture_output=True, text=True, timeout=4
         )
         return sorted({line.strip() for line in result.stdout.splitlines()
@@ -783,7 +783,7 @@ def spine_editor_instance_pids():
                 continue
             try:
                 raw = (entry / "cmdline").read_bytes()
-                args = [os.fsdecode(value) for value in raw.split(b"\\0") if value]
+                args = [os.fsdecode(value) for value in raw.split(b"\0") if value]
                 if not args:
                     continue
                 executable = Path(args[0]).name.casefold()
