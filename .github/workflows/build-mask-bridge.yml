@@ -272,6 +272,7 @@ jobs:
           unzip -t Spine-Mask-Resize-Bridge.zip >/dev/null
           mkdir -p platform-windows platform-macos/macos platform-linux/linux
           cp ../windows-host/SpineMaskInstaller.exe platform-windows/Spine-Mask-Bridge-Windows.exe
+          cp ../windows-host/SpineMaskInstaller.exe SpineMaskInstaller.exe
           cp -R ../macos-host/SpineMaskInstaller.app platform-macos/macos/
           cp ../spine-bridge/INSTALL.command platform-macos/INSTALL.command
           (cd platform-macos && zip -q -X -y -r ../Spine-Mask-Bridge-macOS.zip .)
@@ -322,6 +323,7 @@ jobs:
           gh release upload "$TAG" "dist/Spine-Mask-Resize-Bridge.zip" \
             --repo "$GITHUB_REPOSITORY" --clobber
           gh release upload "$TAG" "dist/platform-windows/Spine-Mask-Bridge-Windows.exe" \
+            "dist/SpineMaskInstaller.exe" \
             "dist/Spine-Mask-Bridge-macOS.zip" "dist/Spine-Mask-Bridge-Linux.tar.gz" \
             --repo "$GITHUB_REPOSITORY" --clobber
           echo "SPINE_MASK_RELEASE_PASS https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG"
