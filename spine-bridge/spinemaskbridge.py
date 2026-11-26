@@ -67,7 +67,8 @@ def spine_cli_license_input():
 
 def editor_import_error(process):
     """Return a bounded, license-redacted diagnostic from a failed Editor CLI import."""
-    detail = str(process.stderr or process.stdout or "No diagnostic was returned.").strip()
+    streams = [str(process.stderr or "").strip(), str(process.stdout or "").strip()]
+    detail = "\\n".join(value for value in streams if value) or "No diagnostic was returned."
     detail = re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", detail)
     license_value = os.environ.get("SPINE_LICENSE", "").strip()
     if license_value:
