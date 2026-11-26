@@ -2,15 +2,17 @@
 
 ## Desktop installation (no terminal commands)
 
-Download and extract **Spine-Mask-Resize-Bridge.zip**, then double-click the launcher for your operating system:
+Choose the direct installer for your operating system:
 
-- **macOS:** **INSTALL.command** (opens the bundled macOS installer app)
-- **Windows:** **INSTALL.bat** (starts the Windows installer)
-- **Linux:** double-click **INSTALL.desktop** (or use **INSTALL.sh** as a fallback)
+- **Windows:** [Spine-Mask-Bridge-Windows.exe](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Bridge-Windows.exe) — double-click the EXE.
+- **macOS:** [Spine-Mask-Bridge-macOS.zip](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Bridge-macOS.zip) — extract and double-click **INSTALL.command**.
+- **Linux:** [Spine-Mask-Bridge-Linux.tar.gz](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Bridge-Linux.tar.gz) — extract and double-click **INSTALL.desktop**.
 
 The installer is self-contained; Python and terminal commands are not required. It registers one least-privilege Native Messaging host used by both Spine Resize and Spine Mask Tool, downloads Chrome for Testing if needed, and opens a dedicated browser profile with the extension already loaded, with both Spine web tools open in separate tabs. It does not modify the user's normal Chrome profile.
 
 The first setup downloads Chrome for Testing and may take a few minutes. Keep the extracted installer folder until setup has completed. After installation, use the **Spine Mask + Resize** desktop shortcut to reopen the dedicated browser. macOS Gatekeeper or Windows SmartScreen may show the operating system's standard confirmation because the installers are not signed with a paid publisher certificate.
+
+The [complete Bridge ZIP](https://github.com/SpineAnimator/Spine-Resize/releases/download/spine-mask-bridge-v1/Spine-Mask-Resize-Bridge.zip) is available for manual/advanced setup.
 
 ## Editor project access
 
