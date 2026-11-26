@@ -1,4 +1,4 @@
-name: Spine-Resize SA agent API contract
+name: Spine-Resize SA agent API contract via public executor
 on:
   push:
     branches: [main]
@@ -6,26 +6,17 @@ on:
       - app.js
       - tools/sa-agent-api-contract.mjs
       - .github/workflows/sa-agent-api-contract.yml
-  workflow_dispatch:
   pull_request:
     paths:
       - app.js
       - tools/sa-agent-api-contract.mjs
       - .github/workflows/sa-agent-api-contract.yml
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  contract:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Check production bundle syntax
-        run: node --check app.js
-      - name: Verify SA browser API
-        run: node tools/sa-agent-api-contract.mjs
+  public-executor:
+    name: Delegate all jobs to sa-public-runner
+    uses: SpineAnimator/sa-public-runner/.github/workflows/sa-agent-api-contract.yml@c3aad4d3fcb9cac0584f99f4b0bd3888301392e1
+    permissions:
+      contents: read
